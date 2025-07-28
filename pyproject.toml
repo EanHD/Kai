@@ -1,0 +1,25 @@
+[project]
+name = "kai"
+version = "0.1.0"
+description = "Add your description here"
+readme = "README.md"
+requires-python = ">=3.12"
+dependencies = [
+    "chromadb>=1.0.15",
+    "docx>=0.2.4",
+    "fastapi>=0.116.1",
+    "google>=3.0.0",
+    "google-genai>=1.27.0",
+    "google-generativeai>=0.8.5",
+    "langchain>=0.3.27",
+    "langchain-ollama>=0.3.6",
+    "langdetect>=1.0.9",
+    "langgraph>=0.5.4",
+    "ollama>=0.5.1",
+    "openai>=1.97.1",
+    "pypdf2>=3.0.1",
+    "python-docx>=1.2.0",
+    "python-dotenv>=1.1.1",
+    "tiktoken>=0.9.0",
+    "uvicorn>=0.35.0",
+]
