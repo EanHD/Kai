@@ -43,6 +43,11 @@ def get_collection(name: str):
         return client.get_or_create_collection(name=name)
     return client.get_or_create_collection(name=name, embedding_function=embedder)
 
+# --- Backward compatibility: alias for get_chroma_collection ---
+def get_chroma_collection(name: str):
+    """Backward-compat alias. Some modules still import get_chroma_collection."""
+    return get_collection(name)
+
 
 # Convenience handles for Kai's memory layers
 
