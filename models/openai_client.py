@@ -7,7 +7,7 @@ client = OpenAI(api_key=os.getenv("OPENAI_API_KEY"))
 
 def run_openai(prompt: str, stream: bool = False):
     response = client.chat.completions.create(
-        model="gpt-4o",
+        model="o4-mini",
         messages=[{"role": "user", "content": prompt}],
         temperature=0.7,
         stream=stream
