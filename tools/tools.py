@@ -22,6 +22,15 @@ except Exception:
     inject_relevant_memory = None
 
 from rag.chroma_client import get_chroma_collection, docs_collection, facts_collection, transcripts_collection
+
+# Lightweight tokenize utility used locally (keeps behavior consistent with memory.store)
+def _tokenize(text: str) -> List[str]:
+    """
+    Normalize and split text into tokens (words). Lowercase, collapse whitespace.
+    This is intentionally small and dependency-free.
+    """
+    return [t for t in re.sub(r"\s+", " ", text.strip()).lower().split() if t]
+
 # --- Retrieval helper ---
 def retrieve_context(query: str, k: int = 6) -> str:
     """Query all memory layers and return a compact stitched context with lightweight citations."""
