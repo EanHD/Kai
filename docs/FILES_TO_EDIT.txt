@@ -1,0 +1,16 @@
+Files to open/edit for the Memory subsystem work (no other files required right now):
+
+- memory/store.py        (NEW)     -> central Memory API (remember/recall/update/forget/gc/snapshot/restore/inject_relevant_memory)
+- tests/test_memory.py   (NEW)     -> unit + smoke tests for dedupe, TTL/decay, fusion, snapshot/restore
+- docs/memory.md         (NEW)     -> design notes and quick how-to
+- tools/tools.py         (MODIFY)  -> replace/augment retrieve_context with inject_relevant_memory() or call memory.recall() where appropriate
+- server.py              (MODIFY)  -> optionally prepend injected memory context for kai-graph and local model paths
+- sync_docs_to_chroma.py (MODIFY)  -> optionally emit FACT memory items via memory.store.remember() when syncing docs (feature toggle)
+- rag/chroma_client.py   (READ)    -> backend helper (kept mostly read-only; used when MEMORY_BACKEND=chroma)
+- models/ollama_client.py(READ)    -> read-only (embeddings fallback path may use Ollama later)
+- pyproject.toml         (READ)    -> may add test deps if needed (pytest)
+
+Notes:
+- I can proceed to produce exact edits for the NEW files (memory/store.py, docs/memory.md, tests/test_memory.py) and the changes to tools/tools.py and server.py.
+- If you want the Chroma backend fully implemented now, please add/confirm chromadb is available in your environment; otherwise the default sqlite backend will be used.
+- Shall I proceed to create the new files and the modifications to tools/tools.py and server.py now?
