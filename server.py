@@ -1,6 +1,7 @@
 
 import os
 import time
+import logging
 from typing import List, Dict, Optional
 
 from fastapi import FastAPI, Body
@@ -32,6 +33,7 @@ app.add_middleware(
 )
 
 load_dotenv()
+logger = logging.getLogger(__name__)
 OPENROUTER_KEY = os.getenv("OPEN_ROUTER_KEY", "")
 
 # ------------------------------------------------------------
@@ -192,6 +194,14 @@ async def chat_completions(req: OpenAIChatRequest = Body(...)):
     # Graph model path
     if model == "kai-graph:default":
         from tools.tools import run_kai_router
+        # Debug log to indicate memory injection settings (best-effort)
+        use_inject = os.getenv("ENABLE_MEMORY_INJECT", "true").lower() == "true"
+        budget = int(os.getenv("MEMORY_TOKENS", "800"))
+        if use_inject:
+            try:
+                logger.debug("Memory injection enabled; token budget=%s", budget)
+            except Exception:
+                pass
         result = await run_kai_router([m.dict() for m in req.messages])
         text = result.get("answer", "")
         if req.stream:

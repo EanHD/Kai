@@ -12,6 +12,12 @@ from models.gemini_client import run_gemini
 
 from models.openrouter_client import chat as or_chat
 
+# Optional memory injection helper (best-effort import)
+try:
+    from memory.store import inject_relevant_memory
+except Exception:
+    inject_relevant_memory = None
+
 from rag.chroma_client import get_chroma_collection, docs_collection, facts_collection, transcripts_collection
 # --- Retrieval helper ---
 def retrieve_context(query: str, k: int = 6) -> str:
@@ -208,6 +214,24 @@ async def run_kai_router(messages: List[Dict]) -> Dict:
     text += "\nASSISTANT:"
     raw_user = messages[-1]["content"] if messages else ""
     low = raw_user.lower()
+
+    # Memory injection (optional, controlled by env vars)
+    try:
+        turn_text = raw_user
+        use_inject = os.getenv("ENABLE_MEMORY_INJECT", "true").lower() == "true"
+        budget = int(os.getenv("MEMORY_TOKENS", "800"))
+        injected = ""
+        if use_inject and inject_relevant_memory is not None:
+            try:
+                injected = inject_relevant_memory(turn_text, token_budget=budget)
+            except Exception:
+                injected = ""
+        preface = f"### Relevant Memory\n{injected}\n\n" if injected else ""
+        if preface:
+            text = preface + text
+    except Exception:
+        # Best-effort: do not fail routing if memory injection has issues
+        pass
 
     # Lightweight heuristic: pull RAG if user references docs/projects or asks how/why
     used_rag = False
