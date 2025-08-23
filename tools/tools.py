@@ -4,7 +4,10 @@ from typing import Dict, List, Tuple
 
 import re
 import os
-import tiktoken
+try:
+    import tiktoken
+except Exception:
+    tiktoken = None
 from langdetect import detect
 from models.ollama_client import load_model as ollama_model
 from models.openai_client import run_openai
@@ -69,10 +72,20 @@ def detect_language(text: str) -> str:
         return "unknown"
 
 def token_count(text: str, model: str = "gpt-4o") -> int:
+    """
+    Return an approximate token count for `text`. Prefer tiktoken when available,
+    fall back to a word-count approximation otherwise.
+    """
+    if tiktoken is None:
+        # Fallback: approximate tokens by word count
+        return len(_tokenize(text))
     try:
         enc = tiktoken.encoding_for_model(model)
-    except:
-        enc = tiktoken.get_encoding("cl100k_base")
+    except Exception:
+        try:
+            enc = tiktoken.get_encoding("cl100k_base")
+        except Exception:
+            return len(_tokenize(text))
     return len(enc.encode(text))
 
 def estimate_cost(text: str, model: str = "gpt-4o") -> float:

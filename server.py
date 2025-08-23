@@ -33,7 +33,13 @@ app.add_middleware(
 )
 
 load_dotenv()
+logging.basicConfig(level=os.getenv("LOG_LEVEL", "INFO"))
 logger = logging.getLogger(__name__)
+# Helpful debug context (non-sensitive): show memory backend + injection flag at startup
+try:
+    logger.debug("ENV memory backend=%s, memory inject=%s", os.getenv("MEMORY_BACKEND"), os.getenv("ENABLE_MEMORY_INJECT"))
+except Exception:
+    pass
 OPENROUTER_KEY = os.getenv("OPEN_ROUTER_KEY", "")
 
 # ------------------------------------------------------------
