@@ -162,3 +162,6 @@ Two ways to enable:
 - Or push from local with a PAT that has `workflow` permission (classic PAT: `repo`, `workflow`; or fine-grained PAT with Actions: Read/Write).
 
 No runtime behavior depends on CI; it’s purely for tests on push/PR.
+
+## Server quickstart
+See docs/QUICKSTART_SERVER.md for venv and Docker instructions, plus a smoke test.
