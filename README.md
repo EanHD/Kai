@@ -152,3 +152,13 @@ Example:
 ENABLE_MEMORY_INJECT=true
 MEMORY_TOKENS=800
 ```
+
+## CI (optional)
+This repo previously included a GitHub Actions workflow at `.github/workflows/ci.yml`.
+If your token lacks the `workflow` scope, GitHub will reject pushes that create/update workflows.
+Two ways to enable:
+
+- Add CI via GitHub web UI: Go to **Actions → New workflow**, select Python/pytest template, commit to `.github/workflows/ci.yml`.
+- Or push from local with a PAT that has `workflow` permission (classic PAT: `repo`, `workflow`; or fine-grained PAT with Actions: Read/Write).
+
+No runtime behavior depends on CI; it’s purely for tests on push/PR.
