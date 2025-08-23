@@ -1,2 +1,25 @@
+# Python
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+.venv/
 .env
+.pytest_cache/
+
+# Databases
+*.db
+*.sqlite3
+
+# Aider metadata
 .aider*
+
+# Chroma artifacts
+chroma/
+
+# IDEs
+.vscode/
+.idea/
+
+# Node
+node_modules/
