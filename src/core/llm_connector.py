@@ -65,6 +65,28 @@ class LLMConnector(ABC):
         """
         pass
 
+    async def generate_stream(
+        self,
+        messages: List[Message],
+        temperature: float = 0.7,
+        max_tokens: Optional[int] = None,
+        **kwargs
+    ):
+        """Generate streaming response from model.
+        
+        Args:
+            messages: List of conversation messages
+            temperature: Sampling temperature (0.0-2.0)
+            max_tokens: Maximum tokens to generate
+            **kwargs: Provider-specific parameters
+            
+        Yields:
+            Chunks of generated content
+        """
+        # Default implementation: fall back to non-streaming
+        response = await self.generate(messages, temperature, max_tokens, **kwargs)
+        yield response.content
+
     @abstractmethod
     async def check_health(self) -> bool:
         """Check if model is available and responding.

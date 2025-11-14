@@ -115,6 +115,11 @@ class OrchestratorAdapter:
                 "completion_tokens": orchestrator_response.get("completion_tokens", 0),
                 "total_tokens": orchestrator_response.get("total_tokens", 0),
             },
+            # Custom metadata for logging
+            "_metadata": {
+                "cost": orchestrator_response.get("cost", 0.0),
+                "model_used": orchestrator_response.get("model_used", model_name),
+            }
         }
         
         # Add tool calls if present
@@ -253,6 +258,8 @@ class OrchestratorAdapter:
             "prompt_tokens": prompt_tokens,
             "completion_tokens": completion_tokens,
             "total_tokens": prompt_tokens + completion_tokens,
+            "cost": response.cost if hasattr(response, 'cost') else 0.0,
+            "model_used": response.model_used if hasattr(response, 'model_used') else request.get("model", "unknown"),
         }
 
     async def invoke_orchestrator_stream(
@@ -268,38 +275,61 @@ class OrchestratorAdapter:
         """
         logger.info(f"Invoking orchestrator stream: provider={request.get('provider')}, model={request.get('model')}")
         
-        # For now, fall back to non-streaming and chunk the response
-        # TODO: Implement true streaming when orchestrator supports it
-        logger.warning("Streaming not yet implemented - using chunked non-streaming response")
+        # Extract messages
+        messages = request.get("messages", [])
+        if not messages:
+            raise ValueError("No messages in request")
         
-        # Get full response
-        full_response = await self.invoke_orchestrator(request)
-        content = full_response.get("content", "")
+        # Get last user message
+        query_text = None
+        for msg in reversed(messages):
+            if msg.get("role") == "user":
+                query_text = msg.get("content", "")
+                break
         
-        # Split content into word-level chunks for streaming effect
-        words = content.split()
-        chunk_size = 5  # Words per chunk
+        if not query_text:
+            raise ValueError("No user message found in request")
         
-        for i in range(0, len(words), chunk_size):
-            chunk_words = words[i:i + chunk_size]
-            chunk_text = " ".join(chunk_words)
+        # Convert to Message objects
+        from src.core.llm_connector import Message
+        message_objs = [
+            Message(role=msg.get("role", "user"), content=msg.get("content", ""))
+            for msg in messages
+        ]
+        
+        # Get the appropriate connector
+        provider = request.get("provider", "ollama")
+        if provider == "ollama" and self.orchestrator.local_connector:
+            connector = self.orchestrator.local_connector
+        elif provider in self.orchestrator.external_connectors:
+            connector = self.orchestrator.external_connectors[provider]
+        else:
+            raise ValueError(f"Provider {provider} not available")
+        
+        # Stream from connector
+        temperature = request.get("temperature", 0.7)
+        max_tokens = request.get("max_tokens")
+        
+        try:
+            async for chunk in connector.generate_stream(
+                messages=message_objs,
+                temperature=temperature,
+                max_tokens=max_tokens,
+            ):
+                yield {
+                    "delta": chunk,
+                    "is_first_chunk": False,
+                }
             
-            # Add space after chunk unless it's the last chunk
-            if i + chunk_size < len(words):
-                chunk_text += " "
-            
-            chunk = {
-                "delta": chunk_text,
-                "is_first_chunk": (i == 0),
+            # Final chunk with finish_reason
+            yield {
+                "delta": "",
+                "finish_reason": "stop",
             }
-            
-            yield chunk
         
-        # Send final chunk with finish_reason
-        yield {
-            "delta": "",
-            "finish_reason": "stop",
-        }
+        except Exception as e:
+            logger.error(f"Streaming error: {e}")
+            raise RuntimeError(f"Failed to stream response: {str(e)}")
     
     async def _reflect_on_api_interaction(
         self,

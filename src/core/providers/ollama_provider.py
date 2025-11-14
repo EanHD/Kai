@@ -103,6 +103,70 @@ class OllamaProvider(LLMConnector):
         except Exception as e:
             logger.error(f"Ollama generation error: {e}")
             raise
+    
+    async def generate_stream(
+        self,
+        messages: List[Message],
+        temperature: float = 0.7,
+        max_tokens: Optional[int] = None,
+        **kwargs
+    ):
+        """Generate streaming response using Ollama.
+        
+        Args:
+            messages: Conversation messages
+            temperature: Sampling temperature
+            max_tokens: Maximum tokens
+            **kwargs: Additional parameters
+            
+        Yields:
+            Chunks of generated content
+        """
+        try:
+            ollama_messages = [
+                {"role": msg.role, "content": msg.content}
+                for msg in messages
+            ]
+            
+            payload = {
+                "model": self.model_name,
+                "messages": ollama_messages,
+                "stream": True,
+                "options": {
+                    "temperature": temperature,
+                }
+            }
+            
+            if max_tokens:
+                payload["options"]["num_predict"] = max_tokens
+            
+            async with self.client.stream(
+                "POST",
+                f"{self.base_url}/api/chat",
+                json=payload,
+                timeout=60.0,
+            ) as response:
+                response.raise_for_status()
+                
+                async for line in response.aiter_lines():
+                    if line.strip():
+                        import json
+                        chunk = json.loads(line)
+                        
+                        if "message" in chunk:
+                            content = chunk["message"].get("content", "")
+                            if content:
+                                yield content
+                        
+                        if chunk.get("done", False):
+                            break
+        
+        except httpx.HTTPStatusError as e:
+            logger.error(f"Ollama streaming HTTP error: {e.response.status_code}")
+            raise RuntimeError(f"Ollama unavailable: {e.response.status_code}")
+        except Exception as e:
+            logger.error(f"Ollama streaming error: {e}")
+            raise RuntimeError(f"Ollama error: {str(e)}")
 
     async def check_health(self) -> bool:
         """Check if Ollama server and model are available.

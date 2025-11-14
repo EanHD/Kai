@@ -141,21 +141,41 @@ if config.get("cors.enabled", True):
     )
     logger.info("CORS enabled")
 
+# Add request logging middleware
+from src.api.middleware.request_logger import RequestLoggerMiddleware
+app.add_middleware(RequestLoggerMiddleware)
+logger.info("Request logging middleware enabled")
+
 
 # Global exception handler
 @app.exception_handler(Exception)
 async def global_exception_handler(request: Request, exc: Exception):
     """Handle unexpected exceptions with OpenAI-compatible error format."""
-    logger.error(f"Unhandled exception: {exc}", exc_info=True)
+    logger.error(f"Unhandled exception on {request.url.path}: {exc}", exc_info=True)
+    
+    # Detect specific error types and provide helpful messages
+    error_message = "Internal server error"
+    error_code = "internal_error"
+    
+    if "Ollama" in str(exc) or "ollama" in str(exc).lower():
+        error_message = "AI model service (Ollama) unavailable. Please ensure Ollama is running."
+        error_code = "model_unavailable"
+    elif "connection" in str(exc).lower() or "timeout" in str(exc).lower():
+        error_message = "Connection to AI model failed. Service may be down or overloaded."
+        error_code = "connection_error"
+    elif "not found" in str(exc).lower():
+        error_message = "Requested model not found. Check available models at /v1/models"
+        error_code = "model_not_found"
     
     return JSONResponse(
         status_code=500,
         content={
             "error": {
-                "message": "Internal server error",
+                "message": error_message,
                 "type": "server_error",
                 "param": None,
-                "code": "internal_error",
+                "code": error_code,
+                "details": str(exc) if logger.level <= logging.DEBUG else None,
             }
         },
     )
@@ -226,22 +246,45 @@ async def chat_completions(request: ChatCompletionRequest):
         else:
             # Return complete response
             response = await process_chat_completion(request, config, adapter)
-            return response
+            
+            # Extract metadata for headers
+            metadata = response.model_dump().get("_metadata", {})
+            
+            # Create JSONResponse with custom headers
+            from fastapi.responses import JSONResponse as FastAPIJSONResponse
+            response_dict = response.model_dump(exclude={"_metadata"})
+            
+            return FastAPIJSONResponse(
+                content=response_dict,
+                headers={
+                    "X-Model-Used": metadata.get("model_used", ""),
+                    "X-Cost": str(metadata.get("cost", 0.0)),
+                }
+            )
             
     except ValueError as e:
         # Model not found or invalid request
+        logger.warning(f"Invalid request: {e}")
         error_response = invalid_request_error(str(e))
         raise HTTPException(status_code=400, detail=error_response.model_dump())
         
     except RuntimeError as e:
-        # Orchestrator error
-        error_response = server_error(str(e))
-        raise HTTPException(status_code=500, detail=error_response.model_dump())
+        # Orchestrator error - provide helpful context
+        error_msg = str(e)
+        if "Ollama" in error_msg:
+            error_msg = f"Ollama service error: {error_msg}. Ensure Ollama is running and the model is loaded."
+        
+        logger.error(f"Runtime error: {error_msg}")
+        error_response = server_error(error_msg)
+        raise HTTPException(status_code=503, detail=error_response.model_dump())
         
     except Exception as e:
         # Unexpected error
         logger.error(f"Unexpected error in chat completions: {e}", exc_info=True)
-        error_response = server_error("An unexpected error occurred")
+        error_response = server_error(
+            "An unexpected error occurred. Check logs for details." if logger.level > logging.DEBUG 
+            else f"Error: {str(e)}"
+        )
         raise HTTPException(status_code=500, detail=error_response.model_dump())
 
 
