@@ -216,10 +216,10 @@ class OrchestratorAdapter:
             )
             # Populate with message history (excluding last user message)
             for msg in messages[:-1]:  # All messages except the current query
-                conversation.add_to_context(
-                    role=msg.get("role", "user"),
-                    content=msg.get("content", ""),
-                )
+                conversation.add_to_context({
+                    "role": msg.get("role", "user"),
+                    "content": msg.get("content", ""),
+                })
         
         # Process query through orchestrator
         response = await self.orchestrator.process_query(
