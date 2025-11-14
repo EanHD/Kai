@@ -10,6 +10,7 @@
 - 🤖 **Intelligent Model Routing**: Automatically routes simple queries to fast local models and complex reasoning to powerful external models
 - 🧠 **Self-Improving Memory**: Reflection agent learns from past interactions, distills patterns, and evolves knowledge over time
 - 🔍 **Web Search Integration**: Grounded information retrieval with DuckDuckGo and Ollama fallback
+- 🐍 **Auto-Code-Generation**: Automatically generates and executes Python code for computational queries (math, combinations, statistics)
 - 🧠 **Personal Memory**: RAG-based personal information storage with encryption
 - 🎭 **Adaptive Response Modes**: Automatically adjusts tone (concise/expert/advisor) based on context and emotion
 - 🐍 **Safe Code Execution**: Sandboxed Python execution in Docker containers with gVisor support
@@ -192,13 +193,32 @@ The sweep analyzes recent episodes, generates rules/prompts/checklists, and prun
 **Example interactions**:
 
 ```
+You: Calculate how many combinations of boxes: A=3.5kg, B=7.2kg, C=4.8kg, D=2.3kg, E=6.1kg. Max 12kg
+🎓 Kai: Let me calculate that for you.
+
+🔬 Auto-Generated Code:
+   from itertools import combinations
+   items = {'A': 3.5, 'B': 7.2, 'C': 4.8, 'D': 2.3, 'E': 6.1}
+   ...
+   
+💻 Code Execution:
+   Output: Found 16 valid combinations
+   
+💬 Kai: Based on the calculation, there are 16 different combinations of boxes 
+      the robot can carry without exceeding the 12kg limit.
+
 You: What's 1543 * 892?
 🎓 Kai: Let me calculate that for you.
 
-🔬 Code Execution:
+🔬 Auto-Generated Code:
+   a = 1543
+   b = 892
+   result = a * b
+   
+💻 Code Execution:
    Output: 1376356
 
-The result is 1,376,356.
+💬 Kai: The result is 1,376,356.
 
 You: Remember my sleep schedule is 11pm-7am
 💬 Kai: I've stored your sleep schedule: 11pm-7am.

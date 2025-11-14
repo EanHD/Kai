@@ -4,6 +4,7 @@ from typing import Dict, Any, Optional, List
 from src.core.llm_connector import LLMConnector, Message
 from src.core.query_analyzer import QueryAnalyzer
 from src.core.cost_tracker import CostTracker
+from src.core.code_generator import CodeGenerator
 from src.models.query import Query
 from src.models.response import Response, select_response_mode
 from src.models.conversation import ConversationSession
@@ -40,6 +41,7 @@ class Orchestrator:
         self.external_connectors = external_connectors or {}
         self.tools = tools or {}
         self.query_analyzer = QueryAnalyzer()
+        self.code_generator = CodeGenerator()
         self.cost_tracker = CostTracker(cost_limit, soft_cap_threshold)
         
         # Load capability specifications for intelligent routing
@@ -263,25 +265,44 @@ class Orchestrator:
                     "top_k": 3,
                 }
             elif capability == "code_exec":
-                # Code execution - for computational queries, provide guidance
-                # The model should generate code, but we can help by including
-                # the query context as a hint
-                parameters = {
-                    "query_context": query.raw_text,
-                    "execution_mode": "safe",
-                }
-                
-                # Note: Code execution is typically triggered by model response
-                # that includes code blocks. However, we still execute the tool
-                # here to make the capability available and log the intent.
-                logger.info(
-                    f"Code execution capability detected for query - "
-                    f"tool available for model to invoke"
-                )
-                
-                # Skip automatic execution for now - let model decide
-                # In future: auto-generate code for simple math queries
-                continue
+                # Code execution - check if we can auto-generate code
+                if self.code_generator.can_auto_generate(query.raw_text):
+                    logger.info(
+                        f"Auto-generating Python code for computational query"
+                    )
+                    
+                    # Generate code automatically
+                    generated_code = self.code_generator.generate(query.raw_text)
+                    
+                    if generated_code:
+                        parameters = {
+                            "code": generated_code,
+                            "auto_generated": True,
+                        }
+                        logger.debug(f"Generated code:\n{generated_code[:200]}...")
+                    else:
+                        logger.warning("Code generation failed, skipping execution")
+                        continue
+                else:
+                    # Code execution - for computational queries, provide guidance
+                    # The model should generate code, but we can help by including
+                    # the query context as a hint
+                    parameters = {
+                        "query_context": query.raw_text,
+                        "execution_mode": "safe",
+                    }
+                    
+                    # Note: Code execution is typically triggered by model response
+                    # that includes code blocks. However, we still execute the tool
+                    # here to make the capability available and log the intent.
+                    logger.info(
+                        f"Code execution capability detected for query - "
+                        f"tool available for model to invoke (no auto-generation)"
+                    )
+                    
+                    # Skip automatic execution for now - let model decide
+                    # Only auto-generate for recognized patterns
+                    continue
             else:
                 parameters = {}
             
