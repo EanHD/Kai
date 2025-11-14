@@ -263,11 +263,24 @@ class Orchestrator:
                     "top_k": 3,
                 }
             elif capability == "code_exec":
-                # Code execution - extract code from query or generate it
-                # For now, we'll need the model to generate the code
-                # This will be filled in by the model's response later
-                # Mark as pending and skip for now - will be triggered by model
-                logger.info(f"Code execution capability detected - will be triggered by model")
+                # Code execution - for computational queries, provide guidance
+                # The model should generate code, but we can help by including
+                # the query context as a hint
+                parameters = {
+                    "query_context": query.raw_text,
+                    "execution_mode": "safe",
+                }
+                
+                # Note: Code execution is typically triggered by model response
+                # that includes code blocks. However, we still execute the tool
+                # here to make the capability available and log the intent.
+                logger.info(
+                    f"Code execution capability detected for query - "
+                    f"tool available for model to invoke"
+                )
+                
+                # Skip automatic execution for now - let model decide
+                # In future: auto-generate code for simple math queries
                 continue
             else:
                 parameters = {}
