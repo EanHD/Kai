@@ -92,7 +92,7 @@ async def process_chat_completion_stream(
     request: ChatCompletionRequest,
     config: APIConfig,
     adapter: OrchestratorAdapter,
-) -> AsyncIterator[ChatCompletionChunk]:
+):
     """Process streaming chat completion request.
     
     Args:
@@ -101,7 +101,7 @@ async def process_chat_completion_stream(
         adapter: Orchestrator adapter
         
     Yields:
-        OpenAI-formatted chat completion chunks
+        SSE-formatted strings (not ChatCompletionChunk objects)
         
     Raises:
         ValueError: If model not found or request invalid
@@ -140,7 +140,15 @@ async def process_chat_completion_stream(
                 request_id=request_id,
             )
             
-            yield ChatCompletionChunk(**openai_chunk)
+            chunk_obj = ChatCompletionChunk(**openai_chunk)
+            
+            # Format as SSE
+            import json
+            chunk_json = chunk_obj.model_dump_json(exclude_none=True)
+            yield f"data: {chunk_json}\n\n"
+        
+        # Send [DONE] marker
+        yield "data: [DONE]\n\n"
             
     except Exception as e:
         logger.error(f"Streaming failed: {e}")

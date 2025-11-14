@@ -235,9 +235,8 @@ async def chat_completions(request: ChatCompletionRequest):
         
         # Handle streaming vs non-streaming
         if request.stream:
-            # Return streaming response
-            chunks = process_chat_completion_stream(request, config, adapter)
-            sse_stream = stream_openai_response(chunks)
+            # Return streaming response (already SSE formatted)
+            sse_stream = process_chat_completion_stream(request, config, adapter)
             
             return EventSourceResponse(
                 sse_stream,
