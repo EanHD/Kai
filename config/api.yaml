@@ -1,0 +1,65 @@
+# API Server Configuration
+
+server:
+  host: "0.0.0.0"
+  port: 9000
+  workers: 4
+  reload: false  # Set true for development
+
+# Authentication settings
+auth:
+  enabled: false  # Set true for production
+  allow_no_auth: true  # Allow requests without auth (dev mode)
+
+# Model name mapping: client request → backend provider
+model_mapping:
+  # Local models (Ollama)
+  granite-local:
+    provider: ollama
+    model: granite4:micro-h
+    description: "Fast local model for simple queries"
+  
+  # External models (OpenRouter)
+  opus-4.1:
+    provider: openrouter
+    model: anthropic/claude-opus-4.1
+    description: "Most capable model for complex reasoning"
+  
+  sonnet-4.5:
+    provider: openrouter
+    model: anthropic/claude-sonnet-4.5
+    description: "Balanced performance and cost"
+  
+  grok-4-fast:
+    provider: openrouter
+    model: x-ai/grok-4-fast
+    description: "SOTA cost-efficiency with 2M context window"
+
+# Default model when none specified
+default_model: granite-local
+
+# CORS configuration
+cors:
+  enabled: true
+  allow_origins:
+    - "*"  # Restrict in production
+  allow_methods:
+    - "GET"
+    - "POST"
+    - "OPTIONS"
+  allow_headers:
+    - "Content-Type"
+    - "Authorization"
+
+# Rate limiting
+rate_limiting:
+  enabled: false  # Enable in production
+  default_limit: "60/minute"
+  per_key_limit: "100/minute"
+
+# Logging
+logging:
+  level: INFO
+  log_requests: true
+  log_responses: false  # Privacy: don't log response content
+  log_errors: true

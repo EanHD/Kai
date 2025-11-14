@@ -1,0 +1,31 @@
+#!/bin/bash
+# Start Kai FastAPI Server (Development Mode)
+# Auto-reload on file changes, debug logging
+
+set -e
+
+# Get script directory and project root
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+PROJECT_ROOT="$(cd "$SCRIPT_DIR/.." && pwd)"
+
+cd "$PROJECT_ROOT"
+
+# Load environment variables if .env exists
+if [ -f ".env" ]; then
+    echo "Loading environment from .env"
+    set -a
+    source .env
+    set +a
+fi
+
+echo "Starting Kai API server in DEVELOPMENT mode..."
+echo "Auto-reload enabled, port 9000"
+echo "Press Ctrl+C to stop"
+echo ""
+
+# Start with uvicorn directly for hot reload
+if command -v uv &> /dev/null; then
+    exec uv run uvicorn main:app --reload --host 0.0.0.0 --port 9000 --log-level debug
+else
+    exec uvicorn main:app --reload --host 0.0.0.0 --port 9000 --log-level debug
+fi

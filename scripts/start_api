@@ -1,0 +1,28 @@
+#!/bin/bash
+# Start Kai FastAPI Server (Production Mode)
+# Port 9000, 4 workers, configured via config/api.yaml
+
+set -e
+
+# Get script directory and project root
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+PROJECT_ROOT="$(cd "$SCRIPT_DIR/.." && pwd)"
+
+cd "$PROJECT_ROOT"
+
+# Load environment variables if .env exists
+if [ -f ".env" ]; then
+    echo "Loading environment from .env"
+    set -a
+    source .env
+    set +a
+fi
+
+# Check if uv is available
+if command -v uv &> /dev/null; then
+    echo "Starting Kai API server with uv..."
+    exec uv run python main.py
+else
+    echo "Starting Kai API server with python..."
+    exec python main.py
+fi

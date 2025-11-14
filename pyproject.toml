@@ -1,0 +1,67 @@
+[project]
+name = "kai"
+version = "0.1.0"
+description = "Intelligent LLM orchestrator with tool integration"
+readme = "README.md"
+requires-python = ">=3.11"
+dependencies = [
+    "langgraph>=0.0.40",
+    "langchain>=0.1.0",
+    "langchain-community>=0.0.20",
+    "ollama>=0.1.0",
+    "openai>=1.10.0",
+    "lancedb>=0.3.0",
+    "pydantic>=2.5.0",
+    "duckduckgo-search>=4.1.0",
+    "vaderSentiment>=3.3.2",
+    "docker>=7.0.0",
+    "httpx>=0.25.0",
+    "python-dotenv>=1.0.0",
+    "pyyaml>=6.0.1",
+    "cryptography>=41.0.0",
+    "pytest>=7.4.0",
+    "pytest-asyncio>=0.21.0",
+    "pytest-cov>=4.1.0",
+    "sentence-transformers>=5.1.2",
+    "fastapi>=0.104.0",
+    "uvicorn[standard]>=0.24.0",
+    "sse-starlette>=1.6.0",
+    "python-multipart>=0.0.6",
+    "tiktoken>=0.12.0",
+]
+
+[project.optional-dependencies]
+# Enhanced memory/RAG with better embeddings
+embeddings = [
+    "sentence-transformers>=2.2.0",
+    "torch>=2.0.0",
+]
+
+# Full installation with all features
+all = [
+    "sentence-transformers>=2.2.0",
+    "torch>=2.0.0",
+]
+
+[tool.ruff]
+line-length = 100
+target-version = "py311"
+
+[tool.ruff.lint]
+select = [
+    "E",  # pycodestyle errors
+    "W",  # pycodestyle warnings
+    "F",  # pyflakes
+    "I",  # isort
+    "B",  # flake8-bugbear
+    "C4",  # flake8-comprehensions
+    "UP",  # pyupgrade
+]
+ignore = [
+    "E501",  # line too long (handled by formatter)
+    "B008",  # do not perform function calls in argument defaults
+]
+
+[tool.ruff.format]
+quote-style = "double"
+indent-style = "space"

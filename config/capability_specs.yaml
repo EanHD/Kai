@@ -1,0 +1,98 @@
+# Local Model Capability Specifications
+#
+# Defines strengths, weaknesses, and optimal use cases for local models.
+# This helps the orchestrator make intelligent routing decisions and understand
+# what each local model can confidently handle.
+#
+# Format:
+# model_id: Matches model ID in models.yaml
+# capabilities: What the model can do well
+# strengths: Areas where model excels
+# weaknesses: Known limitations
+# optimal_complexity_range: [min, max] complexity scores where model performs best
+# confidence_with_tools: Multiplier for confidence when tools are available
+# benchmark_scores: Optional performance metrics
+
+models:
+  # IBM Granite 4 Tiny-H - Local Model
+  granite4-micro:
+    display_name: "Granite 4 Tiny-H"
+    description: "Fast, capable local model optimized for tool use and structured tasks"
+    
+    capabilities:
+      - "conversational": true
+      - "function_calling": true
+      - "web_search_compatible": true  # Works great with web search tool
+      - "code_execution_compatible": true
+      - "rag_compatible": true
+      - "json_mode": false
+      - "multimodal": false
+    
+    strengths:
+      - "Fast response times (local inference)"
+      - "Excellent with web search integration"
+      - "Good at structured queries with clear goals"
+      - "Confident and aware of tool availability"
+      - "Strong factual accuracy when equipped with tools"
+      - "Cost-effective (free local inference)"
+      - "Privacy-preserving (no external API calls)"
+    
+    weaknesses:
+      - "Limited pure reasoning without tools"
+      - "May struggle with extremely complex multi-step reasoning"
+      - "Less creative than larger models"
+      - "Smaller knowledge cutoff (training data older)"
+      - "May need web search for recent events"
+    
+    optimal_use_cases:
+      - "Queries that can leverage web search"
+      - "Factual questions with tool support"
+      - "Code execution tasks"
+      - "Simple to moderate complexity conversations"
+      - "RAG-enhanced queries (memory/document retrieval)"
+      - "Structured tasks (data formatting, parsing)"
+    
+    routing_guidance:
+      optimal_complexity_range: [0.0, 0.5]  # 0.0-0.5 complexity
+      with_tools_range: [0.0, 0.65]  # Can handle up to 0.65 with tools
+      confidence_multiplier_with_tools: 1.3  # 30% more confident with tools
+      prefer_over_external_when:
+        - has_web_search: true
+        - has_code_exec: true
+        - complexity_below: 0.5
+        - user_prefers_privacy: true
+    
+    benchmarks:
+      # Optional: Add benchmark scores as you test
+      # mmlu_score: 0.XX
+      # gsm8k_score: 0.XX
+      # hellaswag_score: 0.XX
+      average_response_time_ms: 800  # Approximate local inference time
+      context_window_tokens: 2000000  # 2M tokens
+    
+    model_personality:
+      tone: "Confident but humble"
+      behavior: "Proactively suggests using tools when beneficial"
+      self_awareness: "Knows when to escalate to external models"
+      user_guidance: |
+        Granite 4 is designed to be confident with its tools (web search, code execution).
+        It should:
+        - Proactively use web search for current information
+        - Admit when a query needs more powerful reasoning
+        - Suggest escalation for complex creative or analytical tasks
+        - Be assertive about its strengths (tool integration, factual retrieval)
+
+# Template for additional local models
+# model_template:
+#   display_name: ""
+#   description: ""
+#   capabilities: {}
+#   strengths: []
+#   weaknesses: []
+#   optimal_use_cases: []
+#   routing_guidance:
+#     optimal_complexity_range: [0.0, 0.0]
+#     with_tools_range: [0.0, 0.0]
+#     confidence_multiplier_with_tools: 1.0
+#   benchmarks: {}
+#   model_personality: {}

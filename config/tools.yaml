@@ -1,0 +1,63 @@
+# Tool Configuration
+#
+# Configure available tools for the LLM orchestrator.
+# Tools are automatically invoked based on query analysis:
+# - web_search: For current information, facts, news
+# - rag: For personal memory retrieval (user preferences, schedules, goals)
+# - code_execution: For calculations, data analysis, verified computations
+# - sentiment: For emotional tone detection (automatic, always-on)
+#
+# All tools support intelligent fallback strategies when primary method fails.
+
+tools:
+  # Web Search Tool
+  # Retrieves current information with source citations
+  # Fallback: Ollama native search → DuckDuckGo → cached results
+  web_search:
+    enabled: true
+    provider: duckduckgo  # Primary provider
+    config:
+      max_results: 5            # Number of search results to retrieve
+      timeout_seconds: 10       # Request timeout
+      fallback_on_rate_limit: true  # Auto-fallback if rate limited
+      cache_duration_hours: 24  # Cache results for faster retrieval
+
+  # RAG Memory Store Tool
+  # Stores and retrieves personal information with encryption
+  # Uses semantic search with embeddings for natural language queries
+  rag:
+    enabled: true
+    provider: lancedb  # Vector database backend
+    config:
+      embedding_model: sentence-transformers/all-MiniLM-L6-v2  # Fast, accurate
+      embedding_dimension: 384      # Model output dimension
+      top_k: 5                      # Max memories to retrieve per query
+      similarity_threshold: 0.7     # Minimum relevance score (0.0-1.0)
+      max_context_length: 2000      # Max tokens from retrieved memories
+
+  # Code Execution Tool
+  # Safely executes Python code in sandboxed Docker containers
+  # Security: Isolated network, limited resources, read-only filesystem
+  code_execution:
+    enabled: true
+    provider: docker
+    config:
+      runtime: gvisor              # Enhanced security (optional, requires setup)
+      timeout_seconds: 30          # Max execution time
+      memory_limit_mb: 512         # Container memory limit
+      allowed_packages:            # Pre-installed in sandbox image
+        - numpy
+        - pandas
+        - matplotlib
+      sandbox_image: python:3.11-slim  # Docker image (or kai-python-sandbox:latest)
+
+  # Sentiment Analysis Tool
+  # Detects emotional tone for adaptive response modes
+  # Automatic: Runs before every query to adjust tone
+  sentiment:
+    enabled: true
+    provider: vader  # VADER sentiment analyzer (fast, accurate)
+    config:
+      threshold_positive: 0.05     # Score above this = positive emotion
+      threshold_negative: -0.05    # Score below this = negative emotion
+      cache_results: true          # Cache per-query to avoid redundant analysis

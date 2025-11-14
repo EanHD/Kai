@@ -1,0 +1,92 @@
+# LLM Model Configuration
+# 
+# Configure available models for intelligent routing.
+# The orchestrator automatically selects models based on:
+# - Query complexity (simple queries → local, complex → external)
+# - Cost constraints (soft cap reached → switch to cheaper models)
+# - Capabilities required (code generation, JSON mode, etc.)
+#
+# Model Selection Priority (Cost-First Strategy):
+# 1. Local models (cost=0) - ALWAYS TRY FIRST for simple queries
+# 2. Cheapest external (Grok Fast) - Ultra-cheap baseline for moderate tasks
+# 3. Mid-tier (Claude Sonnet) - Balanced quality when cheap isn't enough
+# 4. Premium (Claude Opus) - LAST RESORT for mission-critical accuracy
+# 5. Higher routing_priority = preferred when capabilities match
+#
+# Strategy: Start cheap, escalate only when accuracy demands it
+#
+# Fields:
+# - model_id: Unique identifier for internal tracking
+# - model_name: Actual model name (provider-specific format)
+# - provider: "ollama" or "openrouter"
+# - capabilities: List of model abilities (chat, function_calling, json_mode, etc.)
+# - context_window: Maximum tokens in context (input + output)
+# - cost_per_1k_input: Cost per 1000 input tokens in USD (0.0 for local)
+# - cost_per_1k_output: Cost per 1000 output tokens in USD (0.0 for local)
+# - routing_priority: Higher = preferred (1-10 scale)
+# - is_local: true for Ollama, false for external APIs
+# - active: Set to false to disable without deleting config
+
+models:
+  # Local Model (Ollama) - Free, Fast, Privacy-First
+  # Best for: Simple queries, casual conversation, quick facts
+  - model_id: granite4-micro
+    model_name: granite4:micro-h  # Run: ollama pull granite4:micro-h
+    provider: ollama
+    capabilities:
+      - chat
+      - function_calling
+    context_window: 2000000  # 2M tokens!
+    cost_per_1k_input: 0.0
+    cost_per_1k_output: 0.0
+    routing_priority: 10  # FREE - always try first!
+    is_local: true
+    active: true
+
+  # External Model (OpenRouter) - Most Capable, Expensive
+  # Best for: Complex reasoning, multi-hop analysis, creative tasks
+  - model_id: claude-opus
+    model_name: anthropic/claude-opus-4.1
+    provider: openrouter
+    capabilities:
+      - chat
+      - function_calling
+      - json_mode
+    context_window: 200000
+    cost_per_1k_input: 0.015
+    cost_per_1k_output: 0.075
+    routing_priority: 3  # EXPENSIVE - only for critical accuracy
+    is_local: false
+    active: true  # Set to false if no API key or want to disable
+
+  # External Model (OpenRouter) - Balanced Performance/Cost
+  # Best for: Moderate complexity, good reasoning at lower cost
+  - model_id: claude-sonnet
+    model_name: anthropic/claude-sonnet-4.5
+    provider: openrouter
+    capabilities:
+      - chat
+      - function_calling
+      - json_mode
+    context_window: 200000
+    cost_per_1k_input: 0.003
+    cost_per_1k_output: 0.015
+    routing_priority: 5  # BALANCED - good reasoning at reasonable cost
+    is_local: false
+    active: true  # Set to false if no API key or want to disable
+
+  # External Model (OpenRouter) - Super Cheap & Fast with Huge Context
+  # Best for: High-volume queries, cost-sensitive workloads, long context tasks
+  - model_id: grok-fast
+    model_name: x-ai/grok-4-fast
+    provider: openrouter
+    capabilities:
+      - chat
+      - function_calling
+      - multimodal
+    context_window: 2000000  # 2M tokens!
+    cost_per_1k_input: 0.0002  # $0.20 per million = $0.0002 per 1k
+    cost_per_1k_output: 0.0005  # $0.50 per million = $0.0005 per 1k
+    routing_priority: 8  # ULTRA-CHEAP - 15x cheaper than Sonnet, 150x cheaper than Opus!
+    is_local: false
+    active: true  # Set to false if no API key or want to disable

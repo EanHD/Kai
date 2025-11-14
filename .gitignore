@@ -1,0 +1,92 @@
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+build/
+develop-eggs/
+dist/
+downloads/
+eggs/
+.eggs/
+lib64/
+parts/
+sdist/
+var/
+wheels/
+pip-wheel-metadata/
+share/python-wheels/
+*.egg-info/
+.installed.cfg
+*.egg
+MANIFEST
+
+# Virtual environments
+venv/
+ENV/
+env/
+.venv
+
+# PyCharm
+.idea/
+
+# VS Code
+.vscode/
+
+# Testing
+.pytest_cache/
+.coverage
+htmlcov/
+.tox/
+.hypothesis/
+
+# Environment variables
+.env
+.env.*
+!.env.template
+
+# Databases
+*.db
+*.sqlite
+*.sqlite3
+
+# Vector stores
+vectors/
+.kai_assistant/
+
+# Logs
+*.log
+logs/
+
+# OS
+.DS_Store
+Thumbs.db
+*.tmp
+*.swp
+
+# Docker
+*.dockerignore
+
+# LanceDB
+lancedb/
+*.lance
+
+# Model caches
+.cache/
+
+# User memory data (keep structure, ignore user data)
+data/memory/*/
+
+# Speckit development artifacts (hidden, not deleted)
+.specify/
+specs/*/plan.md
+specs/*/tasks.md
+specs/*/research.md
+specs/*/data-model.md
+specs/*/quickstart.md
+specs/*/checklists/
+specs/*/contracts/
+specs/*/STATUS.md
+specs/*/IMPLEMENTATION_SUMMARY.md
+
