@@ -258,27 +258,53 @@ models:
 
 ### Tool Configuration
 
-Edit `config/tools.yaml`:
+Edit `config/tools.yaml` to enable/disable tools:
 
 ```yaml
 tools:
   web_search:
     enabled: true
-    provider: hybrid
+    provider: duckduckgo
     config:
       max_results: 5
       timeout_seconds: 10
-      cache_ttl: 3600
+      cache_duration_hours: 24
       
-  code_executor:
+  rag:
     enabled: true
+    provider: lancedb
+    config:
+      embedding_model: sentence-transformers/all-MiniLM-L6-v2
+      top_k: 5
+      similarity_threshold: 0.7
+      
+  code_execution:
+    enabled: true
+    provider: docker
     config:
       timeout_seconds: 30
-      memory_limit: "128m"
-      cpu_quota: 100000
-      use_gvisor: true
-      network_disabled: true
+      memory_limit_mb: 512
+      sandbox_image: python:3.11-slim
+      runtime: gvisor  # Optional enhanced security
+      
+  sentiment:
+    enabled: true
+    provider: vader
+    config:
+      threshold_positive: 0.05
+      threshold_negative: -0.05
 ```
+
+**Tool Behavior**:
+- **Disabled tools**: When `enabled: false`, the tool is skipped gracefully without errors
+- **Missing dependencies**: Tools handle missing external services with informative fallbacks
+- **Configuration**: All tools respect environment variables (see `.env.template`)
+
+**Available Tools**:
+1. **web_search**: DuckDuckGo search with caching and fallback strategies
+2. **rag**: Personal memory storage with semantic search (requires ENCRYPTION_KEY)
+3. **code_execution**: Sandboxed Python execution in Docker containers
+4. **sentiment**: Emotional tone detection for adaptive responses (always-on when enabled)
 
 ## Architecture
 

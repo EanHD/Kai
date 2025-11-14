@@ -235,7 +235,18 @@ class Orchestrator:
         
         for capability in query.required_capabilities:
             if capability not in self.tools:
-                logger.warning(f"Tool not available: {capability}")
+                logger.info(f"Tool '{capability}' not available (disabled or not configured) - continuing without it")
+                # Create a failed invocation to track unavailable tools
+                invocations.append(ToolInvocation(
+                    query_message_id=query.query_id,
+                    tool_name=capability,
+                    parameters={},
+                    result=None,
+                    error=f"Tool not available (disabled or not configured)",
+                    execution_time_ms=0,
+                    status="failed",
+                    fallback_used=False,
+                ))
                 continue
             
             tool = self.tools[capability]
@@ -262,8 +273,20 @@ class Orchestrator:
                 parameters = {}
             
             # Execute tool
-            logger.info(f"Executing tool: {capability}")
+            logger.info(f"Executing tool: {capability} with params: {list(parameters.keys())}")
+            start_time = time.time()
             result = await tool.execute_with_fallback(parameters)
+            elapsed_ms = int((time.time() - start_time) * 1000)
+            
+            if result.status == ToolStatus.SUCCESS:
+                logger.info(
+                    f"Tool '{capability}' succeeded in {elapsed_ms}ms"
+                    f"{' (fallback used)' if result.fallback_used else ''}"
+                )
+            else:
+                logger.warning(
+                    f"Tool '{capability}' failed after {elapsed_ms}ms: {result.error}"
+                )
             
             # Create invocation record
             invocation = ToolInvocation(

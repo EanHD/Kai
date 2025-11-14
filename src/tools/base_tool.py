@@ -40,6 +40,7 @@ class BaseTool(ABC):
         """
         self.config = config
         self.tool_name = self.__class__.__name__
+        self.enabled = config.get("enabled", True)
 
     @abstractmethod
     async def execute(self, parameters: Dict[str, Any]) -> ToolResult:
@@ -75,6 +76,17 @@ class BaseTool(ABC):
         Returns:
             ToolResult from primary execution or fallback
         """
+        # Check if tool is disabled
+        if not self.enabled:
+            logger.info(f"{self.tool_name} is disabled")
+            return ToolResult(
+                tool_name=self.tool_name,
+                status=ToolStatus.FAILED,
+                error="Tool is disabled in configuration",
+                execution_time_ms=0,
+                fallback_used=False,
+            )
+        
         try:
             result = await self.execute(parameters)
             return result

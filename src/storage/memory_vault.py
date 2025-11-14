@@ -111,6 +111,41 @@ class MemoryVault:
             ttl_days=90,
             tags=tags,
         )
+    
+    async def write_episodic(
+        self,
+        *,
+        session_id: str,
+        user_text: str,
+        assistant_text: str,
+        success: Optional[bool] = None,
+        summary: Optional[str] = None,
+        confidence: Optional[float] = None,
+        tags: Optional[List[str]] = None,
+    ) -> MemoryRecord:
+        """Async wrapper for add_episode to support reflection agent.
+        
+        Args:
+            session_id: Session identifier
+            user_text: User's input
+            assistant_text: Assistant's response
+            success: Whether interaction was successful
+            summary: Brief summary of episode
+            confidence: Confidence score (0.0-1.0)
+            tags: List of tags for categorization
+            
+        Returns:
+            Created MemoryRecord
+        """
+        return self.add_episode(
+            session_id=session_id,
+            user_text=user_text,
+            assistant_text=assistant_text,
+            success=success,
+            summary=summary,
+            confidence=confidence,
+            tags=tags,
+        )
 
     def list(
         self,

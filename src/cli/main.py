@@ -133,64 +133,91 @@ class CLI:
                     logger.warning(f"No API key for OpenRouter model: {model_config.model_id}")
 
     def _init_tools(self) -> dict:
-        """Initialize available tools."""
+        """Initialize available tools based on configuration."""
         tools = {}
+        enabled_tools = self.config.get_enabled_tools()
         
         # Initialize web search tool
-        try:
-            web_search_config = {
-                "max_results": 5,
-                "timeout_seconds": 10,
-            }
-            tools["web_search"] = WebSearchTool(web_search_config)
+        if "web_search" in enabled_tools:
+            try:
+                tool_config = enabled_tools["web_search"]
+                web_search_config = {
+                    "max_results": tool_config.config.get("max_results", 5),
+                    "timeout_seconds": tool_config.config.get("timeout_seconds", 10),
+                }
+                tools["web_search"] = WebSearchTool(web_search_config)
+                if self.debug:
+                    logger.info("WebSearchTool initialized successfully")
+            except Exception as e:
+                logger.error(f"Failed to initialize WebSearchTool: {e}")
+        else:
             if self.debug:
-                logger.info("WebSearchTool initialized successfully")
-        except Exception as e:
-            logger.warning(f"Failed to initialize WebSearchTool: {e}")
+                logger.info("WebSearchTool disabled in configuration")
         
         # Initialize memory store tool
-        try:
-            encryption_key = self.config.get_env("encryption_key")
-            if not encryption_key:
-                raise ValueError("encryption_key not found in config")
-            
-            memory_config = {
-                "embedding_model": self.config.get_env("embedding_model"),
-            }
-            tools["rag"] = MemoryStoreTool(
-                config=memory_config,
-                vector_store=self.vector_store,
-                encryption_key=encryption_key
-            )
+        if "rag" in enabled_tools:
+            try:
+                encryption_key = self.config.get_env("encryption_key")
+                if not encryption_key:
+                    raise ValueError("encryption_key not found in config")
+                
+                tool_config = enabled_tools["rag"]
+                memory_config = {
+                    "embedding_model": tool_config.config.get(
+                        "embedding_model", 
+                        self.config.get_env("embedding_model")
+                    ),
+                }
+                tools["rag"] = MemoryStoreTool(
+                    config=memory_config,
+                    vector_store=self.vector_store,
+                    encryption_key=encryption_key
+                )
+                if self.debug:
+                    logger.info("MemoryStoreTool initialized successfully")
+            except Exception as e:
+                logger.error(f"Failed to initialize MemoryStoreTool: {e}")
+        else:
             if self.debug:
-                logger.info("MemoryStoreTool initialized successfully")
-        except Exception as e:
-            logger.warning(f"Failed to initialize MemoryStoreTool: {e}")
+                logger.info("MemoryStoreTool disabled in configuration")
         
         # Initialize sentiment analyzer tool
-        try:
-            sentiment_config = {}
-            tools["sentiment"] = SentimentAnalyzerTool(sentiment_config)
+        if "sentiment" in enabled_tools:
+            try:
+                tool_config = enabled_tools["sentiment"]
+                sentiment_config = tool_config.config
+                tools["sentiment"] = SentimentAnalyzerTool(sentiment_config)
+                if self.debug:
+                    logger.info("SentimentAnalyzerTool initialized successfully")
+            except Exception as e:
+                logger.error(f"Failed to initialize SentimentAnalyzerTool: {e}")
+        else:
             if self.debug:
-                logger.info("SentimentAnalyzerTool initialized successfully")
-        except Exception as e:
-            logger.warning(f"Failed to initialize SentimentAnalyzerTool: {e}")
+                logger.info("SentimentAnalyzerTool disabled in configuration")
         
         # Initialize code executor tool
-        try:
-            code_exec_config = {
-                "timeout_seconds": 30,
-                "memory_limit": "128m",
-                "cpu_quota": 100000,
-                "image": "kai-python-sandbox:latest",
-                "use_gvisor": True,
-                "network_disabled": True,
-            }
-            tools["code_execution"] = CodeExecutorTool(code_exec_config)
+        if "code_execution" in enabled_tools:
+            try:
+                tool_config = enabled_tools["code_execution"]
+                code_exec_config = {
+                    "timeout_seconds": tool_config.config.get("timeout_seconds", 30),
+                    "memory_limit": tool_config.config.get("memory_limit_mb", "128") + "m",
+                    "cpu_quota": 100000,
+                    "image": tool_config.config.get("sandbox_image", "kai-python-sandbox:latest"),
+                    "use_gvisor": tool_config.config.get("runtime", "").lower() == "gvisor",
+                    "network_disabled": True,
+                }
+                tools["code_execution"] = CodeExecutorTool(code_exec_config)
+                if self.debug:
+                    logger.info("CodeExecutorTool initialized successfully")
+            except Exception as e:
+                logger.error(f"Failed to initialize CodeExecutorTool: {e}")
+        else:
             if self.debug:
-                logger.info("CodeExecutorTool initialized successfully")
-        except Exception as e:
-            logger.warning(f"Failed to initialize CodeExecutorTool: {e}")
+                logger.info("CodeExecutorTool disabled in configuration")
+        
+        if self.debug:
+            logger.info(f"Initialized {len(tools)} tools: {list(tools.keys())}")
         
         return tools
 
