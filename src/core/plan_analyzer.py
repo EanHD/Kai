@@ -157,23 +157,23 @@ Response:
 
 EXAMPLE PLAN FOR WEB SEARCH (for current information, news, facts):
 
-Query: "What is the latest news about SpaceX?"
+Query: "What's happening with SpaceX launches this month?"
 
 Response:
 {
-  "intent": "get_latest_news",
+  "intent": "get_spacex_launch_info",
   "complexity": "simple",
   "safety_level": "normal",
   "capabilities": ["web_search"],
   "steps": [
     {
-      "id": "search_news",
+      "id": "search_launches",
       "type": "tool_call",
       "tool": "web_search",
       "model": null,
-      "description": "Search for SpaceX news",
+      "description": "Search for SpaceX launches",
       "input": {
-        "query": "SpaceX latest news"
+        "query": "SpaceX launches November 2025"
       },
       "depends_on": [],
       "required": true,
@@ -186,12 +186,16 @@ Response:
       "model": "granite",
       "description": "Present result to user",
       "input": {},
-      "depends_on": ["search_news"],
+      "depends_on": ["search_launches"],
       "required": true,
       "can_skip_if_unavailable": false
     }
   ]
 }
+
+IMPORTANT: For follow-up queries, expand the search query based on conversation context!
+Example: If previous query was "rap concerts in San Jose" and user asks "anything in December?",
+the search query should be: "rap concerts San Jose December 2025"
 
 EXAMPLE PLAN FOR DATE/TIME QUERIES (use code_exec, NOT web_search):
 
@@ -272,11 +276,26 @@ class PlanAnalyzer:
         Returns:
             Plan object with steps to execute
         """
-        # Build prompt
+        # Build prompt with conversation context if available
+        user_content = query_text
+        if context and context.get("conversation_history"):
+            history = context["conversation_history"]
+            if history:
+                # Add recent context to help understand follow-up questions
+                context_str = "\n\nRecent conversation:\n"
+                for msg in history[-3:]:  # Last 3 messages
+                    role = msg.get("role", "unknown")
+                    content = msg.get("content", "")[:200]  # Limit length
+                    context_str += f"{role}: {content}\n"
+                user_content = context_str + f"\nCurrent query: {query_text}"
+                logger.info(f"Added conversation context with {len(history)} messages to plan analyzer")
+        
         messages = [
             Message(role="system", content=ANALYZER_SYSTEM_PROMPT),
-            Message(role="user", content=query_text),
+            Message(role="user", content=user_content),
         ]
+        
+        logger.debug(f"Plan analyzer input: {user_content[:300]}...")
 
         try:
             # Call Granite to generate plan

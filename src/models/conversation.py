@@ -3,7 +3,7 @@
 import logging
 import uuid
 from dataclasses import dataclass, field
-from datetime import datetime
+from datetime import datetime, UTC
 from typing import Any
 
 logger = logging.getLogger(__name__)
@@ -86,7 +86,7 @@ class ConversationSession:
 
     def end_session(self) -> None:
         """Mark session as ended."""
-        self.ended_at = datetime.utcnow()
+        self.ended_at = datetime.now(UTC)
 
     def is_active(self) -> bool:
         """Check if session is still active.
@@ -110,14 +110,14 @@ class ConversationSession:
         """
         # Add timestamp if not present
         if "timestamp" not in message:
-            message["timestamp"] = datetime.utcnow().isoformat()
+            message["timestamp"] = datetime.now(UTC).isoformat()
 
         # Calculate accurate token count if not provided
         if "token_count" not in message and "content" in message:
             message["token_count"] = count_tokens(message["content"], model)
 
         self.context_window.append(message)
-        self.last_activity = datetime.utcnow()
+        self.last_activity = datetime.now(UTC)
 
         # Token management - remove oldest messages if over limit
         total_tokens = sum(msg.get("token_count", 0) for msg in self.context_window)
@@ -139,7 +139,7 @@ class ConversationSession:
             List of {role, content} dicts
         """
         messages = []
-        now = datetime.utcnow()
+        now = datetime.now(UTC)
 
         for msg in self.context_window:
             # Parse timestamp

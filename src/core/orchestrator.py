@@ -70,6 +70,10 @@ class Orchestrator:
             specialist_verifier=self.specialist_verifier,
         )
 
+        # Presenter: ALWAYS use local model for user-facing text
+        # External models (Grok) should only output JSON for planning
+        # Local model handles natural language presentation
+        logger.info("Using local model for presentation")
         self.presenter = GranitePresenter(self.local_connector)
 
     async def process_query(
@@ -102,8 +106,26 @@ class Orchestrator:
         start_time = time.time()
 
         try:
+            # Retrieve conversation history for context
+            conversation_context = []
+            if self.conversation_service:
+                try:
+                    messages = self.conversation_service.get_messages(
+                        conversation.session_id,
+                        limit=3  # Last 3 messages for plan context
+                    )
+                    conversation_context = messages
+                    if conversation_context:
+                        logger.info(f"Retrieved {len(conversation_context)} messages for plan context")
+                except Exception as e:
+                    logger.warning(f"Failed to get context for planning: {e}")
+            
             # Step 1: Analyze → Plan
-            plan = await self.plan_analyzer.analyze(query_text, source=source)
+            plan = await self.plan_analyzer.analyze(
+                query_text, 
+                source=source,
+                context={"conversation_history": conversation_context} if conversation_context else None
+            )
 
             logger.info(
                 f"📋 PLAN GENERATED | intent={plan.intent} | "

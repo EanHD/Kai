@@ -2,7 +2,7 @@
 
 import uuid
 from dataclasses import dataclass, field
-from datetime import datetime, time
+from datetime import datetime, UTC, time
 from typing import Any
 
 
@@ -75,17 +75,17 @@ class UserProfile:
     def add_schedule(self, schedule: Schedule) -> None:
         """Add a schedule."""
         self.schedules.append(schedule)
-        self.updated_at = datetime.utcnow()
+        self.updated_at = datetime.now(UTC)
 
     def add_goal(self, goal: Goal) -> None:
         """Add a goal."""
         self.goals.append(goal)
-        self.updated_at = datetime.utcnow()
+        self.updated_at = datetime.now(UTC)
 
     def update_preference(self, key: str, value: Any) -> None:
         """Update a preference."""
         self.preferences[key] = value
-        self.updated_at = datetime.utcnow()
+        self.updated_at = datetime.now(UTC)
 
     def get_schedule_by_name(self, name: str) -> Schedule | None:
         """Get schedule by name."""

@@ -5,6 +5,36 @@ All notable changes to the KAI Assistant project will be documented in this file
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.1.0] - 2025-11-15
+
+### 🚀 Major Architecture Improvements
+
+#### Changed
+- **Model Role Separation**: External models (Grok/Claude) now ONLY used for JSON planning, never for user-facing text
+- **Presentation Layer**: Local model (Granite/Llama) now handles ALL user-facing responses
+- **Cost Optimization**: 99% cost reduction by using free local model for presentation (~100 tokens to Grok vs full responses)
+- **Privacy Enhancement**: User-facing responses never sent to cloud APIs, only structured planning data
+- **Offline Capability**: Improved graceful degradation when external APIs unavailable
+
+#### Fixed
+- **Granite Presenter**: Simplified prompt template for better JSON formatting reliability
+- **Citation Support**: Fixed citation formatting in local model responses [1], (1)
+- **Web Search Integration**: Enhanced Perplexity-style search with Tavily AI, Brave Search, and DuckDuckGo fallback
+- **Error Handling**: Better fallback behavior when external models unavailable
+- **Model Configuration**: Clarified model roles in `models.yaml` with inline documentation
+
+#### Added
+- **Hybrid Architecture**: Intelligent model routing (Grok for planning, Granite for presentation)
+- **Multi-Source Web Search**: Integrated Tavily AI for Perplexity-like search capabilities
+- **Enhanced Logging**: Better visibility into which models are used for which tasks
+- **Configuration Comments**: Detailed inline documentation in `models.yaml`
+
+#### Technical Details
+- Modified `src/core/orchestrator.py` to enforce local-only presentation
+- Enhanced `src/core/presenters/granite_presenter.py` with simplified JSON prompts
+- Upgraded `src/tools/web_search.py` with multi-provider fallback system
+- Updated `config/models.yaml` with role-based model documentation
+
 ## [1.0.0] - 2024-11-15
 
 ### 🎉 Initial Production Release

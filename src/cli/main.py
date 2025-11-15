@@ -1,9 +1,18 @@
 """CLI interface for interactive conversation."""
 
-import asyncio
+import os
 import sys
+
+# Suppress ALL Python warnings via environment variable (affects subprocesses too)
+os.environ["PYTHONWARNINGS"] = "ignore"
+
+import asyncio
 import uuid
+import warnings
 from pathlib import Path
+
+# Suppress all warnings in this process
+warnings.simplefilter("ignore")
 
 from dotenv import load_dotenv
 
@@ -91,9 +100,6 @@ class CLI:
             cost_limit=cost_limit,
             soft_cap_threshold=soft_cap_threshold,
         )
-        
-        # Inject conversation service for memory
-        self.orchestrator.conversation_service = self.conversation_service
 
         # Initialize reflection agent (always enabled for continuous learning)
         self.reflection_agent = None
@@ -211,13 +217,15 @@ class CLI:
             try:
                 tool_config = enabled_tools["web_search"]
                 web_search_config = {
-                    "max_results": tool_config.config.get("max_results", 5),
-                    "timeout_seconds": tool_config.config.get("timeout_seconds", 10),
-                    "api_key": self.config.get_env("brave_api_key"),  # Pass Brave API key
+                    "max_results": tool_config.config.get("max_results", 10),
+                    "timeout_seconds": tool_config.config.get("timeout_seconds", 15),
+                    "max_days_old": tool_config.config.get("max_days_old", 30),
+                    "api_key": self.config.get_env("brave_api_key"),  # Brave API
+                    "tavily_api_key": self.config.get_env("tavily_api_key"),  # Tavily AI
                 }
                 tools["web_search"] = WebSearchTool(web_search_config)
                 if self.debug:
-                    logger.info("WebSearchTool initialized successfully")
+                    logger.info("WebSearchTool initialized with Perplexity-style enhancements")
             except Exception as e:
                 logger.error(f"Failed to initialize WebSearchTool: {e}")
         else:
@@ -354,7 +362,7 @@ class CLI:
         while True:
             try:
                 # Get user input
-                user_input = input("   You: ").strip()
+                user_input = input("🗨️ You: ").strip()
 
                 if not user_input:
                     continue

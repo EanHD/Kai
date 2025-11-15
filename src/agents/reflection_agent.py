@@ -11,7 +11,7 @@ from __future__ import annotations
 
 import logging
 from dataclasses import dataclass
-from datetime import datetime, timedelta
+from datetime import datetime, UTC, timedelta
 from typing import Any
 
 from src.core.llm_connector import Message
@@ -196,7 +196,7 @@ class ReflectionAgent:
         """
         try:
             # Get recent episodes and reflections
-            cutoff = datetime.utcnow() - timedelta(days=days_back)
+            cutoff = datetime.now(UTC) - timedelta(days=days_back)
 
             episodes = [
                 e

@@ -1,13 +1,11 @@
-#!/usr/bin/env python3
-"""Kai CLI entry point - run with 'kai' or './kai' from project directory."""
-import sys
-import os
+#!/bin/bash
+# Kai CLI entry point with dependency checks
 
-# Add project to path
-project_root = os.path.dirname(os.path.abspath(__file__))
-sys.path.insert(0, project_root)
+# Check Ollama is running
+if ! pgrep -x "ollama" > /dev/null; then
+    echo "⚠ Warning: Ollama not running (required for local models)"
+    echo "   Start with: ollama serve"
+fi
 
-# Run the CLI module directly (includes argparse logic)
-if __name__ == "__main__":
-    import runpy
-    runpy.run_module("src.cli.main", run_name="__main__")
+# Run Kai with uv
+exec uv run python -m src.cli.main "$@"

@@ -15,7 +15,7 @@ import os
 import uuid
 from collections.abc import Iterable
 from dataclasses import asdict, dataclass, field
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, UTC
 from pathlib import Path
 from typing import Any
 
@@ -74,7 +74,7 @@ class MemoryVault:
         rec = MemoryRecord(
             id=str(uuid.uuid4()),
             type=mtype,
-            created_at=datetime.utcnow().isoformat(),
+            created_at=datetime.now(UTC).isoformat(),
             last_used_at=None,
             confidence=confidence,
             ttl_days=ttl_days,
@@ -208,7 +208,7 @@ class MemoryVault:
         Returns a count of removed items per type.
         """
         removed: dict[str, int] = dict.fromkeys(MEMORY_TYPES, 0)
-        now = datetime.utcnow()
+        now = datetime.now(UTC)
         for mtype, filename in MEMORY_TYPES.items():
             path = self.root / filename
             if not path.exists():

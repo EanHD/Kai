@@ -155,12 +155,16 @@ class PlanExecutor:
         tool_name = step.tool
 
         if not tool_name or tool_name not in self.tools:
-            logger.warning(f"Tool '{tool_name}' not available")
+            logger.error(
+                f"Tool '{tool_name}' not available | "
+                f"step_id={step.id} | step_type={step.type} | "
+                f"available_tools={list(self.tools.keys())}"
+            )
 
             if step.required and not step.can_skip_if_unavailable:
                 return {
                     "status": "failed",
-                    "error": f"Required tool '{tool_name}' not available",
+                    "error": f"Required tool '{tool_name}' not available. Available tools: {list(self.tools.keys())}",
                     "data": {},
                 }
             else:
