@@ -6,10 +6,11 @@ import uuid
 from typing import Any
 
 from src.core.cost_tracker import CostTracker
-from src.core.llm_connector import LLMConnector
+from src.core.llm_connector import LLMConnector, Message
 from src.core.plan_analyzer import PlanAnalyzer
 from src.core.plan_executor import PlanExecutor
 from src.core.presenters.granite_presenter import GranitePresenter
+from src.core.query_analyzer import QueryAnalyzer
 from src.core.sanity_checker import SanityChecker
 from src.core.specialists.verification import SpecialistVerifier
 from src.models.conversation import ConversationSession
@@ -46,7 +47,22 @@ class Orchestrator:
         self.conversation_service = None  # Will be injected by CLI/API
 
         # Core orchestration components
-        self.plan_analyzer = PlanAnalyzer(self.local_connector)
+        # QueryAnalyzer for complexity detection (used for smart routing)
+        self.query_analyzer = QueryAnalyzer()
+        
+        # Use external model (Grok) for planning if available, fallback to local
+        planner_connector = None
+        for model_name, connector in self.external_connectors.items():
+            if "grok" in model_name.lower():
+                planner_connector = connector
+                logger.info(f"Using {model_name} for planning")
+                break
+        
+        if not planner_connector:
+            planner_connector = self.local_connector
+            logger.info("Using local model for planning (no external planner available)")
+        
+        self.plan_analyzer = PlanAnalyzer(planner_connector)
         self.sanity_checker = SanityChecker()
 
         # Auto-detect specialist connectors
@@ -106,6 +122,57 @@ class Orchestrator:
         start_time = time.time()
 
         try:
+            # Step 0: Quick complexity check for simple queries
+            # This saves expensive Grok calls for greetings/chitchat
+            quick_analysis = self.query_analyzer.analyze(query_text)
+            complexity_score = quick_analysis.get("complexity_score", 0.5)
+            capabilities = quick_analysis.get("capabilities", [])
+            
+            # Simple query fast path: no tools needed AND low complexity
+            if not capabilities and complexity_score < 0.3:
+                logger.info(f"✨ SIMPLE QUERY FAST PATH | complexity={complexity_score:.2f}")
+                
+                # Build conversation context for local model
+                messages = []
+                if self.conversation_service:
+                    try:
+                        history = self.conversation_service.get_messages(
+                            conversation.session_id,
+                            limit=5  # Last 5 for context
+                        )
+                        for msg in history:
+                            role = "user" if msg.get("role") == "user" else "assistant"
+                            messages.append(Message(role=role, content=msg.get("content", "")))
+                    except Exception as e:
+                        logger.warning(f"Failed to get history for fast path: {e}")
+                
+                # Add current query
+                messages.append(Message(role="user", content=query_text))
+                
+                # Call local model directly (no planning, no external models)
+                response = await self.local_connector.generate(
+                    messages=messages,
+                    temperature=0.7,
+                    max_tokens=512,
+                )
+                
+                elapsed = time.time() - start_time
+                logger.info(f"✅ FAST PATH COMPLETE | time={elapsed:.2f}s")
+                
+                return Response(
+                    query_id=str(uuid.uuid4()),
+                    mode="concise",
+                    content=response.content,
+                    token_count=response.token_count,
+                    cost=response.cost,
+                )
+            
+            # Complex query: use full plan-execute-present pipeline
+            logger.info(
+                f"🎯 COMPLEX QUERY PATH | complexity={complexity_score:.2f} | "
+                f"capabilities={capabilities}"
+            )
+            
             # Retrieve conversation history for context
             conversation_context = []
             if self.conversation_service:
