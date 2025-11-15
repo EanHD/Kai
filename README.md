@@ -36,11 +36,25 @@ ollama pull granite4:tiny-h
 pip install duckduckgo-search
 cp .env.template .env
 
-# Run (auto-starts Ollama & Docker)
+# Run CLI (auto-starts Ollama & Docker)
 ./kai
+
+# OR run API + Web Playground
+python -m src.api.main
+# Then open playground/index.html in your browser
 ```
 
 **Services auto-start for you** - no manual setup needed!
+
+### 🎮 Web Playground
+
+Try Kai in a beautiful web interface! After starting the API, open `playground/index.html` in your browser for a modern chat experience with:
+- Multi-conversation management
+- Real-time cost tracking  
+- Citation display
+- Dark mode UI
+
+See [playground/README.md](playground/README.md) for details.
 
 ## How Kai Improves Over Time
 
