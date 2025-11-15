@@ -5,6 +5,7 @@ from src.core.llm_connector import LLMConnector, Message
 from src.core.query_analyzer import QueryAnalyzer
 from src.core.cost_tracker import CostTracker
 from src.core.code_generator import CodeGenerator
+from src.core.sanity_checker import SanityChecker
 from src.models.query import Query
 from src.models.response import Response, select_response_mode
 from src.models.conversation import ConversationSession
@@ -42,6 +43,7 @@ class Orchestrator:
         self.tools = tools or {}
         self.query_analyzer = QueryAnalyzer()
         self.code_generator = CodeGenerator()
+        self.sanity_checker = SanityChecker()
         self.cost_tracker = CostTracker(cost_limit, soft_cap_threshold)
         
         # Load capability specifications for intelligent routing
@@ -140,6 +142,48 @@ class Orchestrator:
             temperature=0.7,
             max_tokens=None,  # Let model decide
         )
+        
+        # 5.5. SANITY CHECK - catch unrealistic values before user sees them
+        sanity_result = self.sanity_checker.check_response(
+            response_text=llm_response.content,
+            query_text=query_text
+        )
+        
+        if sanity_result["suspicious"]:
+            logger.warning(
+                f"Sanity check detected issues: {sanity_result['issues']}"
+            )
+            
+            # If issues are severe, consider re-routing to better model
+            if self.sanity_checker.should_escalate(sanity_result):
+                logger.info("Sanity check failed - escalating to external model for verification")
+                
+                # Try to get a better answer from external model if available
+                if "claude-sonnet" in self.external_connectors:
+                    better_connector = self.external_connectors["claude-sonnet"]
+                    can_proceed, reason = self.cost_tracker.can_proceed(
+                        conversation.session_id, estimated_cost=0.005, is_critical=True
+                    )
+                    
+                    if can_proceed:
+                        logger.info("Re-generating with Claude Sonnet to fix suspicious values")
+                        # Add sanity check context to messages
+                        verification_msg = Message(
+                            role="system",
+                            content=(
+                                f"VERIFICATION NEEDED: Previous answer contained suspicious values: "
+                                f"{'; '.join(sanity_result['issues'])}. "
+                                f"Please provide accurate, verified information."
+                            )
+                        )
+                        verification_messages = messages + [verification_msg]
+                        
+                        llm_response = await better_connector.generate(
+                            messages=verification_messages,
+                            temperature=0.3,  # Lower temp for accuracy
+                            max_tokens=None,
+                        )
+                        logger.info("Used better model for verification after sanity check failure")
         
         # 6. Detect explicit mode override
         explicit_override = self._detect_mode_override(query_text)

@@ -41,6 +41,14 @@ class QueryAnalyzer:
         "exchange rate", "stock", "market", "trending"
     ]
     
+    # Product/spec queries that need web verification
+    WEB_SEARCH_SPECS = [
+        "spec", "specification", "datasheet", "data sheet",
+        "conflicting", "check sources", "fake spec", "verify",
+        "at least two sources", "cross-check", "compare specs",
+        "official spec", "manufacturer spec", "real spec"
+    ]
+    
     # Time-sensitive keywords that suggest current data needed
     TIME_SENSITIVE = [
         "now", "currently", "today", "this week", "this month", "this year",
@@ -49,7 +57,20 @@ class QueryAnalyzer:
     
     CODE_EXEC_KEYWORDS = [
         "calculate", "compute", "sum", "average", "analyze data",
-        "plot", "graph", "chart", "statistics", "math"
+        "plot", "graph", "chart", "statistics", "math",
+        "range", "hours", "wh", "kwh", "watt", "miles", "km"
+    ]
+    
+    # Math/calculation patterns that strongly suggest code execution
+    CODE_EXEC_PATTERNS = [
+        r"\d+\s*wh",  # watt-hours
+        r"\d+\s*kwh",  # kilowatt-hours
+        r"\d+\s*w\b",  # watts
+        r"\d+\s*ah",  # amp-hours
+        r"\d+\s*v\b",  # volts
+        r"how many.*hours",
+        r"what.*range",
+        r"total.*capacity",
     ]
     
     MEMORY_KEYWORDS = [
@@ -73,6 +94,13 @@ class QueryAnalyzer:
     REASONING_KEYWORDS = [
         "because", "therefore", "thus", "consequently", "as a result",
         "due to", "leads to", "causes", "implies", "suggests"
+    ]
+    
+    # High-stakes indicators that need better models
+    HIGH_STAKES_KEYWORDS = [
+        "show your work", "show your steps", "explain reasoning",
+        "justify", "prove", "verify", "double check", "are you sure",
+        "critical", "important", "need to be sure", "must be accurate"
     ]
     
     def detect_topic_shift(
@@ -224,6 +252,8 @@ class QueryAnalyzer:
         - Time-sensitive queries ("latest", "current", "today")
         - Information likely to be outdated (prices, weather, news)
         - Factual questions about current events
+        - Product specifications and datasheets
+        - Conflicting information that needs verification
         
         Args:
             text: Lowercase query text
@@ -233,6 +263,11 @@ class QueryAnalyzer:
         """
         # Explicit web search requests
         if any(keyword in text for keyword in self.WEB_SEARCH_KEYWORDS):
+            return True
+        
+        # Product specs and verification needs (CRITICAL for accuracy)
+        if any(keyword in text for keyword in self.WEB_SEARCH_SPECS):
+            logger.debug(f"Web search needed: spec/verification keywords detected")
             return True
         
         # Time-sensitive queries - likely need current data
@@ -268,12 +303,19 @@ class QueryAnalyzer:
         Returns:
             True if code execution needed
         """
+        # Explicit keywords
         if any(keyword in text for keyword in self.CODE_EXEC_KEYWORDS):
             return True
         
         # Check for numerical computations
         if re.search(r'\d+\s*[\+\-\*\/]\s*\d+', text):
             return True
+        
+        # Check for unit-based calculations (batteries, energy, etc.)
+        for pattern in self.CODE_EXEC_PATTERNS:
+            if re.search(pattern, text, re.IGNORECASE):
+                logger.debug(f"Code execution needed: pattern '{pattern}' matched")
+                return True
         
         return False
 
@@ -352,6 +394,17 @@ class QueryAnalyzer:
         
         # Base score from capabilities
         score += len(capabilities) * 0.15
+        
+        # HIGH STAKES BOOST - user explicitly needs accuracy
+        high_stakes_count = sum(1 for kw in self.HIGH_STAKES_KEYWORDS if kw in text)
+        if high_stakes_count > 0:
+            score += 0.25  # Significant boost for verification requests
+            logger.debug(f"High-stakes query detected ({high_stakes_count} indicators)")
+        
+        # Spec/verification queries are inherently higher complexity
+        spec_count = sum(1 for kw in self.WEB_SEARCH_SPECS if kw in text)
+        if spec_count > 0:
+            score += 0.2  # Boost for spec verification needs
         
         # Bonus for complex keywords
         complex_count = sum(1 for kw in self.COMPLEX_KEYWORDS if kw in text)
