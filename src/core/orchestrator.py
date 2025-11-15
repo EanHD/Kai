@@ -6,6 +6,7 @@ from src.core.query_analyzer import QueryAnalyzer
 from src.core.cost_tracker import CostTracker
 from src.core.code_generator import CodeGenerator
 from src.core.sanity_checker import SanityChecker
+from src.core.response_processor import ResponsePostProcessor
 from src.models.query import Query
 from src.models.response import Response, select_response_mode
 from src.models.conversation import ConversationSession
@@ -44,6 +45,7 @@ class Orchestrator:
         self.query_analyzer = QueryAnalyzer()
         self.code_generator = CodeGenerator()
         self.sanity_checker = SanityChecker()
+        self.response_processor = ResponsePostProcessor()
         self.cost_tracker = CostTracker(cost_limit, soft_cap_threshold)
         
         # Load capability specifications for intelligent routing
@@ -203,16 +205,34 @@ class Orchestrator:
             explicit_override=explicit_override,
         )
         
-        # 9. Create response object
+        # 8.5. Post-process response - remove internal tags, extract metadata
+        processed = self.response_processor.process(
+            response_text=llm_response.content,
+            metadata={}
+        )
+        
+        # Log if we found and removed search tags
+        if processed["metadata"].get("searches_performed"):
+            logger.debug(
+                f"Removed {len(processed['metadata']['searches_performed'])} "
+                f"search tags from response"
+            )
+        
+        # 9. Create response object with cleaned content
         response = Response(
             query_id=query.query_id,
             mode=response_mode,
-            content=llm_response.content,
+            content=processed["text"],  # Use cleaned text
             token_count=llm_response.token_count,
             cost=llm_response.cost,
         )
         
-        # 8. Add tool results to response
+        # Add metadata about searches/sources to response
+        if processed["metadata"].get("sources_cited"):
+            for source in processed["metadata"]["sources_cited"]:
+                response.add_citation(title=source, url="", snippet="")
+        
+        # 10. Add tool results to response
         for invocation in tool_invocations:
             if invocation.is_successful() and invocation.tool_name == "web_search":
                 # Add citations from web search

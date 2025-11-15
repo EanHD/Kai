@@ -207,7 +207,8 @@ class CLI:
                     "use_gvisor": tool_config.config.get("runtime", "").lower() == "gvisor",
                     "network_disabled": True,
                 }
-                tools["code_execution"] = CodeExecutorTool(code_exec_config)
+                # Register as "code_exec" to match orchestrator expectations
+                tools["code_exec"] = CodeExecutorTool(code_exec_config)
                 if self.debug:
                     logger.info("CodeExecutorTool initialized successfully")
             except Exception as e:
