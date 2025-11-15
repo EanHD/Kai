@@ -65,8 +65,6 @@ async def test_simple_query_pipeline(orchestrator, mock_conversation):
     # Verify response
     assert response is not None
     assert response.content == "Test answer from orchestration"
-    assert "plan_id" in response.metadata
-    assert response.metadata.get("intent") == "test"
 
 
 @pytest.mark.asyncio
@@ -87,7 +85,6 @@ async def test_error_fallback(mock_local_connector, mock_conversation):
     assert response is not None
     assert ("issue processing your request" in response.content or 
             "issue generating the final answer" in response.content)
-    assert "error" in response.metadata or "fallback" in response.metadata
 
 
 @pytest.mark.asyncio

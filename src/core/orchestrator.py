@@ -132,23 +132,13 @@ class Orchestrator:
             )
             
             # Build response
-            response = Response(
+            return Response(
                 query_id=str(uuid.uuid4()),
                 mode="concise",
                 content=final_output.final_answer,
                 token_count=0,  # TODO: aggregate from execution
                 cost=0.0,  # TODO: aggregate from execution
             )
-            
-            response.metadata = {
-                **final_output.debug_info,
-                "plan_id": plan.plan_id,
-                "intent": plan.intent,
-                "complexity": plan.complexity.value,
-                "elapsed_time": elapsed_time,
-            }
-            
-            return response
             
         except Exception as e:
             logger.error(f"Orchestration failed: {e}", exc_info=True)
@@ -162,7 +152,6 @@ class Orchestrator:
                 ),
                 token_count=0,
                 cost=0.0,
-                metadata={"error": str(e)},
             )
 
     async def check_health(self) -> Dict[str, bool]:
