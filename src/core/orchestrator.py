@@ -1,5 +1,7 @@
 """Main orchestrator for query routing and response generation."""
 
+import os
+import uuid
 from typing import Dict, Any, Optional, List
 from src.core.llm_connector import LLMConnector, Message
 from src.core.query_analyzer import QueryAnalyzer
@@ -7,6 +9,10 @@ from src.core.cost_tracker import CostTracker
 from src.core.code_generator import CodeGenerator
 from src.core.sanity_checker import SanityChecker
 from src.core.response_processor import ResponsePostProcessor
+from src.core.plan_analyzer import PlanAnalyzer
+from src.core.plan_executor import PlanExecutor
+from src.core.presenters.granite_presenter import GranitePresenter
+from src.core.specialists.verification import SpecialistVerifier
 from src.models.query import Query
 from src.models.response import Response, select_response_mode
 from src.models.conversation import ConversationSession
@@ -48,6 +54,41 @@ class Orchestrator:
         self.response_processor = ResponsePostProcessor()
         self.cost_tracker = CostTracker(cost_limit, soft_cap_threshold)
         
+        # Orchestration V2 components
+        self.plan_analyzer = PlanAnalyzer(self.local_connector)
+        
+        # Get fast/strong external connectors for specialists
+        # Look for grok or claude models
+        fast_connector = None
+        strong_connector = None
+        
+        for model_name, connector in self.external_connectors.items():
+            if "grok" in model_name.lower() and not fast_connector:
+                fast_connector = connector
+            elif "claude" in model_name.lower() or "sonnet" in model_name.lower():
+                strong_connector = connector
+        
+        self.specialist_verifier = SpecialistVerifier(
+            fast_connector=fast_connector,
+            strong_connector=strong_connector,
+        )
+        
+        self.plan_executor = PlanExecutor(
+            tools=self.tools,
+            sanity_checker=self.sanity_checker,
+            specialist_verifier=self.specialist_verifier,
+        )
+        
+        self.presenter = GranitePresenter(self.local_connector)
+        
+        # Feature flag for V2 orchestration
+        self.use_orchestration_v2 = os.getenv(
+            "KAI_ORCHESTRATION_V2", "false"
+        ).lower() == "true"
+        
+        if self.use_orchestration_v2:
+            logger.info("Orchestration V2 enabled")
+        
         # Load capability specifications for intelligent routing
         self.capability_specs = CapabilitySpecLoader()
         if self.capability_specs.has_spec("granite4-micro"):
@@ -57,6 +98,105 @@ class Orchestrator:
         self.query_analyzer = QueryAnalyzer()
         self.cost_tracker = CostTracker(cost_limit, soft_cap_threshold)
 
+    async def process_query_v2(
+        self,
+        query_text: str,
+        conversation: ConversationSession,
+        emotional_tone: Optional[Dict[str, Any]] = None,
+    ) -> Response:
+        """Process query using orchestration V2 pipeline.
+        
+        V2 Flow:
+        1. Analyzer generates JSON plan
+        2. Executor runs steps in dependency order
+        3. Presenter generates final answer in Kai's voice
+        
+        Args:
+            query_text: User's query
+            conversation: Conversation session
+            emotional_tone: Optional emotional tone (not used in V2 yet)
+            
+        Returns:
+            Response object with final answer
+        """
+        logger.info(f"🚀 Orchestration V2: Processing query (session={conversation.session_id})")
+        start_time = time.time()
+        
+        try:
+            # Step 1: Analyze → Plan
+            plan = await self.plan_analyzer.analyze(query_text)
+            
+            logger.info(
+                f"📋 Plan generated: intent={plan.intent}, "
+                f"complexity={plan.complexity.value}, "
+                f"steps={len(plan.steps)}, "
+                f"capabilities={plan.capabilities}"
+            )
+            
+            # Step 2: Execute Plan → Results
+            execution_results = await self.plan_executor.execute(plan)
+            
+            tool_count = len(execution_results['tool_results'])
+            specialist_count = len(execution_results['specialist_results'])
+            
+            logger.info(
+                f"⚙️ Plan executed: tools={tool_count}, "
+                f"specialists={specialist_count}"
+            )
+            
+            # Step 3: Finalize → Answer
+            final_output = await self.presenter.finalize(
+                original_query=query_text,
+                plan=plan.to_dict(),
+                tool_results=execution_results['tool_results'],
+                specialist_results=execution_results['specialist_results'],
+            )
+            
+            elapsed_time = time.time() - start_time
+            
+            logger.info(
+                f"✅ Finalization complete: {len(final_output.final_answer)} chars, "
+                f"citations={len(final_output.citations_used)}, "
+                f"time={elapsed_time:.2f}s"
+            )
+            
+            # Create response object
+            response = Response(
+                query_id=str(uuid.uuid4()),
+                mode="concise",  # TODO: derive from plan complexity
+                content=final_output.final_answer,
+                token_count=0,  # TODO: sum from execution
+                cost=0.0,  # TODO: sum from execution
+            )
+            
+            # Add metadata
+            response.metadata = {
+                **final_output.debug_info,
+                "orchestration_version": "v2",
+                "plan_id": plan.plan_id,
+                "intent": plan.intent,
+                "complexity": plan.complexity.value,
+                "elapsed_time": elapsed_time,
+            }
+            
+            return response
+            
+        except Exception as e:
+            logger.error(f"❌ Orchestration V2 failed: {e}", exc_info=True)
+            
+            # Fallback to simple response
+            return Response(
+                query_id=str(uuid.uuid4()),
+                mode="concise",
+                content=(
+                    "I encountered an issue processing your request. "
+                    "Please try rephrasing your question or try again later."
+                ),
+                token_count=0,
+                cost=0.0,
+                metadata={"error": str(e), "orchestration_version": "v2_fallback"},
+            )
+
     async def process_query(
         self,
         query_text: str,
@@ -64,6 +204,8 @@ class Orchestrator:
         emotional_tone: Optional[Dict[str, Any]] = None,
     ) -> Response:
         """Process a user query and generate response.
+        
+        Routes to V2 orchestration if enabled, otherwise uses V1 logic.
         
         Args:
             query_text: User input text
@@ -73,6 +215,11 @@ class Orchestrator:
         Returns:
             Response object with generated content
         """
+        # Route to V2 if enabled
+        if self.use_orchestration_v2:
+            return await self.process_query_v2(query_text, conversation, emotional_tone)
+        
+        # V1 logic continues below
         start_time = time.time()
         
         # 0. Analyze emotional tone if not provided
