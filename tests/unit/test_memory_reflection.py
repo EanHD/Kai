@@ -1,15 +1,19 @@
-"""Tests for memory vault and reflection agent."""
+"""Unit tests for memory and reflection agents."""
+
+import sys
+from pathlib import Path
+
+sys.path.insert(0, str(Path(__file__).parent.parent.parent))
+
+import shutil
+import tempfile
+from unittest.mock import Mock
 
 import pytest
-import asyncio
-from pathlib import Path
-import tempfile
-import shutil
-from unittest.mock import Mock, AsyncMock
 
-from src.storage.memory_vault import MemoryVault
 from src.agents.reflection_agent import ReflectionAgent
 from src.core.llm_connector import LLMResponse
+from src.storage.memory_vault import MemoryVault
 
 
 @pytest.fixture
@@ -30,7 +34,7 @@ def memory_vault(temp_memory_dir):
 def mock_llm():
     """Create mock LLM connector."""
     mock = Mock()
-    
+
     async def mock_generate(messages, temperature=0.7, max_tokens=None):
         return LLMResponse(
             content="Good reflection: The response was clear and concise.",
@@ -38,9 +42,9 @@ def mock_llm():
             cost=0.0001,
             model_used="test-model",
             finish_reason="stop",
-            metadata={}
+            metadata={},
         )
-    
+
     mock.generate = mock_generate
     return mock
 
@@ -56,7 +60,7 @@ def test_memory_vault_add_episode(memory_vault):
         confidence=0.9,
         tags=["python", "programming"],
     )
-    
+
     assert record.id is not None
     assert record.type == "episodic"
     assert record.summary == "Question about Python"
@@ -76,7 +80,7 @@ async def test_memory_vault_write_episodic(memory_vault):
         confidence=0.8,
         tags=["greeting"],
     )
-    
+
     assert record is not None
     assert record.type == "episodic"
     assert record.payload["session_id"] == "api_session"
@@ -92,11 +96,11 @@ def test_memory_vault_list_episodes(memory_vault):
             assistant_text=f"Response {i}",
             tags=["test"],
         )
-    
+
     # List all episodes
     episodes = memory_vault.list(mtype="episodic")
     assert len(episodes) >= 3
-    
+
     # Filter by tag
     tagged = memory_vault.list(mtype="episodic", tag="test")
     assert len(tagged) >= 3
@@ -115,7 +119,7 @@ def test_memory_vault_add_reflection(memory_vault):
         confidence=0.7,
         tags=["auto-generated"],
     )
-    
+
     assert record.type == "reflection"
     assert record.payload["episode_id"] == "ep_123"
 
@@ -130,7 +134,7 @@ def test_memory_vault_prune(memory_vault):
         ttl_days=1,  # Short TTL
         tags=["test"],
     )
-    
+
     # Add high confidence memory
     memory_vault.add(
         "semantic",
@@ -138,10 +142,10 @@ def test_memory_vault_prune(memory_vault):
         confidence=0.9,
         tags=["test"],
     )
-    
+
     # Prune (low confidence should be removed after TTL)
     removed = memory_vault.prune()
-    
+
     # Check that pruning ran
     assert isinstance(removed, dict)
 
@@ -150,7 +154,7 @@ def test_memory_vault_prune(memory_vault):
 async def test_reflection_agent_reflect_on_episode(mock_llm, memory_vault):
     """Test reflection agent generates reflections."""
     agent = ReflectionAgent(mock_llm, memory_vault)
-    
+
     reflection = await agent.reflect_on_episode(
         episode_id="ep_001",
         user_text="How do I use pytest?",
@@ -159,7 +163,7 @@ async def test_reflection_agent_reflect_on_episode(mock_llm, memory_vault):
         mode="expert",
         tools_used=["web_search"],
     )
-    
+
     assert reflection is not None
     assert "episode_id" in reflection["payload"]
     assert reflection["payload"]["episode_id"] == "ep_001"
@@ -169,14 +173,15 @@ async def test_reflection_agent_reflect_on_episode(mock_llm, memory_vault):
 @pytest.mark.asyncio
 async def test_reflection_agent_handles_failure(mock_llm, memory_vault):
     """Test reflection agent handles LLM failures gracefully."""
+
     # Mock LLM that raises an error
     async def failing_generate(messages, temperature=0.7, max_tokens=None):
         raise RuntimeError("LLM failed")
-    
+
     mock_llm.generate = failing_generate
-    
+
     agent = ReflectionAgent(mock_llm, memory_vault)
-    
+
     # Should return None on failure, not raise
     reflection = await agent.reflect_on_episode(
         episode_id="ep_fail",
@@ -184,7 +189,7 @@ async def test_reflection_agent_handles_failure(mock_llm, memory_vault):
         assistant_text="Test response",
         success=False,
     )
-    
+
     assert reflection is None
 
 
@@ -197,11 +202,11 @@ def test_memory_vault_export_markdown(memory_vault, temp_memory_dir):
         assistant_text="Test response",
         tags=["test"],
     )
-    
+
     # Export
     out_path = Path(temp_memory_dir) / "export.md"
     result = memory_vault.export_markdown(str(out_path))
-    
+
     assert Path(result).exists()
     content = Path(result).read_text()
     assert "Memory Vault Export" in content
@@ -212,10 +217,10 @@ def test_memory_vault_export_markdown(memory_vault, temp_memory_dir):
 async def test_reflection_distillation_insufficient_data(mock_llm, memory_vault):
     """Test distillation sweep skips when insufficient data."""
     agent = ReflectionAgent(mock_llm, memory_vault)
-    
+
     # Run distillation with no episodes
     result = await agent.distillation_sweep(days_back=7, min_episodes=5)
-    
+
     assert result["status"] == "skipped"
     assert "insufficient" in result["reason"]
 
@@ -231,7 +236,7 @@ async def test_reflection_distillation_with_data(mock_llm, memory_vault):
             assistant_text=f"Response {i}",
             tags=["test"],
         )
-        
+
         memory_vault.add(
             "reflection",
             payload={
@@ -245,9 +250,9 @@ async def test_reflection_distillation_with_data(mock_llm, memory_vault):
             summary=f"Reflection {i}",
             tags=["auto-generated"],
         )
-    
+
     agent = ReflectionAgent(mock_llm, memory_vault)
-    
+
     # Mock LLM to return structured distillation
     async def mock_distill_generate(messages, temperature=0.7, max_tokens=None):
         return LLMResponse(
@@ -256,12 +261,12 @@ async def test_reflection_distillation_with_data(mock_llm, memory_vault):
             cost=0.0002,
             model_used="test-model",
             finish_reason="stop",
-            metadata={}
+            metadata={},
         )
-    
+
     mock_llm.generate = mock_distill_generate
-    
+
     result = await agent.distillation_sweep(days_back=7, min_episodes=5)
-    
+
     assert result["status"] == "completed"
     assert result["episodes_analyzed"] >= 5

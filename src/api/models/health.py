@@ -1,6 +1,7 @@
 """Health check models."""
 
-from typing import Dict, Literal
+from typing import Literal
+
 from pydantic import BaseModel
 
 
@@ -16,5 +17,5 @@ class HealthStatus(BaseModel):
     """Overall health status."""
 
     status: Literal["healthy", "degraded", "unhealthy"]
-    services: Dict[str, ServiceStatus]
+    services: dict[str, ServiceStatus]
     version: str = "0.1.0"

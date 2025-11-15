@@ -1,6 +1,12 @@
 """Tests for auto-code-generation."""
 
+import sys
+from pathlib import Path
+
+sys.path.insert(0, str(Path(__file__).parent.parent.parent))
+
 import pytest
+
 from src.core.code_generator import CodeGenerator
 
 
@@ -18,7 +24,7 @@ def test_detect_combination_problem(generator):
         "Find the number of combinations",
         "Count all possible combinations",
     ]
-    
+
     for query in queries:
         assert generator.can_auto_generate(query), f"Should detect: {query}"
 
@@ -30,7 +36,7 @@ def test_detect_arithmetic(generator):
         "Calculate 15 + 27",
         "Compute 100 / 5",
     ]
-    
+
     for query in queries:
         assert generator.can_auto_generate(query), f"Should detect: {query}"
 
@@ -42,7 +48,7 @@ def test_detect_factorial(generator):
         "Calculate 5 factorial",
         "Find 12!",
     ]
-    
+
     for query in queries:
         assert generator.can_auto_generate(query), f"Should detect: {query}"
 
@@ -52,9 +58,9 @@ def test_generate_combination_code(generator):
     query = """Calculate how many combinations of boxes can be carried:
     Box weights: A=3.5kg, B=7.2kg, C=4.8kg, D=2.3kg, E=6.1kg
     Max capacity: 12kg"""
-    
+
     code = generator.generate(query)
-    
+
     assert code is not None
     assert "from itertools import combinations" in code
     assert "items = {" in code
@@ -67,9 +73,9 @@ def test_generate_combination_code(generator):
 def test_generate_arithmetic_code(generator):
     """Test generation of arithmetic code."""
     query = "What's 1543 * 892?"
-    
+
     code = generator.generate(query)
-    
+
     assert code is not None
     assert "1543" in code
     assert "892" in code
@@ -79,9 +85,9 @@ def test_generate_arithmetic_code(generator):
 def test_generate_factorial_code(generator):
     """Test generation of factorial code."""
     query = "What is the factorial of 10?"
-    
+
     code = generator.generate(query)
-    
+
     assert code is not None
     assert "import math" in code
     assert "factorial" in code
@@ -91,9 +97,9 @@ def test_generate_factorial_code(generator):
 def test_extract_weighted_items(generator):
     """Test extraction of items with weights."""
     query = "Box weights: A=3.5kg, B=7.2kg, C=4.8kg"
-    
+
     items = generator._extract_weighted_items(query)
-    
+
     assert items is not None
     assert items["A"] == 3.5
     assert items["B"] == 7.2
@@ -109,7 +115,7 @@ def test_extract_constraint(generator):
         ("not exceeding 25", 25.0, "<="),
         ("at most 10", 10.0, "<="),
     ]
-    
+
     for query, expected_value, expected_op in test_cases:
         constraint = generator._extract_constraint(query)
         assert constraint is not None, f"Should extract from: {query}"
@@ -124,7 +130,7 @@ def test_no_generation_for_non_computational(generator):
         "Explain machine learning",
         "Tell me a joke",
     ]
-    
+
     for query in queries:
         assert not generator.can_auto_generate(query), f"Should not detect: {query}"
         assert generator.generate(query) is None
@@ -135,18 +141,18 @@ def test_robot_box_problem(generator):
     query = """Kai is training a robot to carry boxes.
     Each box has a weight:
     - Box A: 3.5 kilograms
-    - Box B: 7.2 kilograms  
+    - Box B: 7.2 kilograms
     - Box C: 4.8 kilograms
     - Box D: 2.3 kilograms
     - Box E: 6.1 kilograms
-    
+
     The robot can carry a maximum of 12 kilograms at one time.
-    
+
     Use Python to calculate: How many different combinations of boxes can the robot carry without exceeding the 12-kilogram limit?"""
-    
+
     # Should detect it
     assert generator.can_auto_generate(query)
-    
+
     # Should generate code
     code = generator.generate(query)
     assert code is not None
@@ -154,7 +160,7 @@ def test_robot_box_problem(generator):
     assert "3.5" in code
     assert "7.2" in code
     assert "12" in code
-    
+
     # The generated code should work when executed
     # (We won't execute it in the test, but verify structure)
     assert "from itertools import combinations" in code

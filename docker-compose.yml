@@ -1,0 +1,64 @@
+version: '3.8'
+
+services:
+  kai-api:
+    build:
+      context: .
+      dockerfile: docker/Dockerfile
+    container_name: kai-api
+    ports:
+      - "8000:8000"
+    environment:
+      - OPENROUTER_API_KEY=${OPENROUTER_API_KEY}
+      - BRAVE_API_KEY=${BRAVE_API_KEY:-}
+      - OLLAMA_BASE_URL=http://ollama:11434
+      - ENVIRONMENT=production
+    volumes:
+      - ./data:/app/data
+      - ./config:/app/config
+      - /var/run/docker.sock:/var/run/docker.sock  # For code execution
+    depends_on:
+      - ollama
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8000/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 40s
+
+  ollama:
+    image: ollama/ollama:latest
+    container_name: kai-ollama
+    ports:
+      - "11434:11434"
+    volumes:
+      - ollama-data:/root/.ollama
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:11434/api/tags"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+
+  # Optional: Web UI (uncomment if needed)
+  # kai-ui:
+  #   build:
+  #     context: ./ui
+  #     dockerfile: Dockerfile
+  #   container_name: kai-ui
+  #   ports:
+  #     - "3000:3000"
+  #   environment:
+  #     - NEXT_PUBLIC_API_URL=http://localhost:8000
+  #   depends_on:
+  #     - kai-api
+  #   restart: unless-stopped
+
+volumes:
+  ollama-data:
+    driver: local
+
+networks:
+  default:
+    name: kai-network

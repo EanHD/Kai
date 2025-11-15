@@ -1,45 +1,36 @@
 """Integration tests for OpenAI-compatible API endpoints."""
 
-import pytest
-from fastapi.testclient import TestClient
-from unittest.mock import Mock, AsyncMock, patch
 import sys
 from pathlib import Path
+from unittest.mock import patch
+
+import pytest
+from fastapi.testclient import TestClient
 
 # Add src to path
 sys.path.insert(0, str(Path(__file__).parent.parent.parent))
 
 from main import app
-from src.api.config import APIConfig
+from src.models.response import Response
 
 
-@pytest.fixture
+@pytest.fixture(scope="module")
 def client():
-    """Create test client."""
-    return TestClient(app)
+    """Create test client that properly initializes app."""
+    with TestClient(app) as test_client:
+        yield test_client
 
 
 @pytest.fixture
-def mock_orchestrator():
-    """Create mock orchestrator."""
-    mock = Mock()
-    mock.local_connector = Mock()
-    mock.external_connectors = {}
-    mock.tools = {}
-    
-    # Mock process_query
-    async def mock_process_query(query_text, conversation):
-        from src.models.response import Response
-        return Response(
-            query_id="test-query-id",
-            mode="concise",
-            content="This is a test response",
-            token_count=10,
-            cost=0.0001,
-        )
-    
-    mock.process_query = mock_process_query
-    return mock
+def mock_response():
+    """Create mock response for process_query."""
+    return Response(
+        query_id="test-query-id",
+        mode="concise",
+        content="This is a test response",
+        token_count=10,
+        cost=0.0001,
+    )
 
 
 def test_root_endpoint(client):
@@ -61,7 +52,7 @@ def test_models_endpoint(client):
     assert "object" in data
     assert data["object"] == "list"
     assert isinstance(data["data"], list)
-    
+
     # Should have at least the local model
     model_ids = [m["id"] for m in data["data"]]
     assert len(model_ids) > 0
@@ -82,7 +73,7 @@ def test_chat_completion_validation_no_messages(client):
         json={
             "model": "granite-local",
             "messages": [],
-        }
+        },
     )
     assert response.status_code == 422  # Validation error
 
@@ -93,10 +84,8 @@ def test_chat_completion_validation_no_user_message(client):
         "/v1/chat/completions",
         json={
             "model": "granite-local",
-            "messages": [
-                {"role": "system", "content": "You are helpful"}
-            ],
-        }
+            "messages": [{"role": "system", "content": "You are helpful"}],
+        },
     )
     assert response.status_code == 400
     data = response.json()
@@ -110,10 +99,8 @@ def test_chat_completion_invalid_model(client):
         "/v1/chat/completions",
         json={
             "model": "nonexistent-model",
-            "messages": [
-                {"role": "user", "content": "Hello"}
-            ],
-        }
+            "messages": [{"role": "user", "content": "Hello"}],
+        },
     )
     assert response.status_code == 400
     data = response.json()
@@ -125,21 +112,19 @@ def test_chat_completion_invalid_model(client):
 async def test_chat_completion_happy_path(client, mock_orchestrator):
     """Test successful chat completion (happy path)."""
     # Patch the orchestrator
-    with patch.object(app.state, 'orchestrator', mock_orchestrator):
+    with patch.object(app.state, "orchestrator", mock_orchestrator):
         response = client.post(
             "/v1/chat/completions",
             json={
                 "model": "granite-local",
-                "messages": [
-                    {"role": "user", "content": "Hello, how are you?"}
-                ],
+                "messages": [{"role": "user", "content": "Hello, how are you?"}],
                 "temperature": 0.7,
-            }
+            },
         )
-        
+
         assert response.status_code == 200
         data = response.json()
-        
+
         # Validate OpenAI response structure
         assert "id" in data
         assert data["id"].startswith("chatcmpl-")
@@ -149,20 +134,20 @@ async def test_chat_completion_happy_path(client, mock_orchestrator):
         assert "model" in data
         assert "choices" in data
         assert len(data["choices"]) > 0
-        
+
         # Validate choice structure
         choice = data["choices"][0]
         assert "index" in choice
         assert "message" in choice
         assert "finish_reason" in choice
-        
+
         # Validate message structure
         message = choice["message"]
         assert "role" in message
         assert message["role"] == "assistant"
         assert "content" in message
         assert len(message["content"]) > 0
-        
+
         # Validate usage
         assert "usage" in data
         usage = data["usage"]
@@ -177,14 +162,12 @@ def test_chat_completion_streaming_format(client):
         "/v1/chat/completions",
         json={
             "model": "granite-local",
-            "messages": [
-                {"role": "user", "content": "Say hello"}
-            ],
+            "messages": [{"role": "user", "content": "Say hello"}],
             "stream": True,
         },
         stream=True,
     )
-    
+
     # Should return 200 for streaming
     assert response.status_code == 200
     assert "text/event-stream" in response.headers.get("content-type", "")
@@ -194,7 +177,7 @@ def test_cors_headers(client):
     """Test CORS headers are present."""
     response = client.options("/v1/chat/completions")
     assert response.status_code == 200
-    
+
     # Check CORS headers
     headers = response.headers
     assert "access-control-allow-origin" in headers
@@ -209,11 +192,11 @@ def test_chat_completion_with_system_message(client):
             "model": "granite-local",
             "messages": [
                 {"role": "system", "content": "You are a helpful assistant."},
-                {"role": "user", "content": "Hello"}
+                {"role": "user", "content": "Hello"},
             ],
-        }
+        },
     )
-    
+
     # Should not fail - system messages are allowed with user messages
     assert response.status_code in [200, 503]  # 503 if Ollama not running
 
@@ -227,10 +210,10 @@ def test_chat_completion_temperature_validation(client):
             "model": "granite-local",
             "messages": [{"role": "user", "content": "Hi"}],
             "temperature": 1.0,
-        }
+        },
     )
     assert response.status_code in [200, 503]
-    
+
     # Invalid temperature (too high)
     response = client.post(
         "/v1/chat/completions",
@@ -238,7 +221,7 @@ def test_chat_completion_temperature_validation(client):
             "model": "granite-local",
             "messages": [{"role": "user", "content": "Hi"}],
             "temperature": 3.0,
-        }
+        },
     )
     assert response.status_code == 422
 
@@ -250,12 +233,12 @@ def test_api_error_format(client):
         json={
             "model": "invalid-model",
             "messages": [{"role": "user", "content": "Test"}],
-        }
+        },
     )
-    
+
     assert response.status_code == 400
     data = response.json()
-    
+
     # OpenAI error format
     assert "error" in data
     error = data["error"]

@@ -1,24 +1,25 @@
 """User profile model with preferences, schedules, and goals."""
 
+import uuid
 from dataclasses import dataclass, field
 from datetime import datetime, time
-from typing import List, Optional, Dict, Any
-import uuid
+from typing import Any
 
 
 @dataclass
 class Schedule:
     """User schedule entry."""
+
     name: str  # e.g., "sleep", "work"
     start_time: time
     end_time: time
-    days: List[int]  # 0=Monday, 6=Sunday
-    
+    days: list[int]  # 0=Monday, 6=Sunday
+
     def is_active_on_day(self, day: int) -> bool:
         """Check if schedule is active on given day."""
         return day in self.days
-    
-    def to_dict(self) -> Dict[str, Any]:
+
+    def to_dict(self) -> dict[str, Any]:
         """Convert to dictionary."""
         return {
             "name": self.name,
@@ -31,23 +32,24 @@ class Schedule:
 @dataclass
 class Goal:
     """User goal with tracking."""
+
     name: str
     target_value: float
     current_value: float
     unit: str  # e.g., "USD", "hours", "kg"
-    deadline: Optional[datetime] = None
-    
+    deadline: datetime | None = None
+
     def progress_percentage(self) -> float:
         """Calculate progress percentage."""
         if self.target_value == 0:
             return 0.0
         return (self.current_value / self.target_value) * 100
-    
+
     def is_on_track(self) -> bool:
         """Check if goal is on track."""
         return self.current_value >= self.target_value
-    
-    def to_dict(self) -> Dict[str, Any]:
+
+    def to_dict(self) -> dict[str, Any]:
         """Convert to dictionary."""
         return {
             "name": self.name,
@@ -61,45 +63,45 @@ class Goal:
 @dataclass
 class UserProfile:
     """User profile with preferences, schedules, and goals."""
-    
+
     user_id: str = field(default_factory=lambda: str(uuid.uuid4()))
     created_at: datetime = field(default_factory=datetime.utcnow)
     updated_at: datetime = field(default_factory=datetime.utcnow)
-    preferences: Dict[str, Any] = field(default_factory=dict)
-    schedules: List[Schedule] = field(default_factory=list)
-    goals: List[Goal] = field(default_factory=list)
+    preferences: dict[str, Any] = field(default_factory=dict)
+    schedules: list[Schedule] = field(default_factory=list)
+    goals: list[Goal] = field(default_factory=list)
     encryption_key_hash: str = ""
-    
+
     def add_schedule(self, schedule: Schedule) -> None:
         """Add a schedule."""
         self.schedules.append(schedule)
         self.updated_at = datetime.utcnow()
-    
+
     def add_goal(self, goal: Goal) -> None:
         """Add a goal."""
         self.goals.append(goal)
         self.updated_at = datetime.utcnow()
-    
+
     def update_preference(self, key: str, value: Any) -> None:
         """Update a preference."""
         self.preferences[key] = value
         self.updated_at = datetime.utcnow()
-    
-    def get_schedule_by_name(self, name: str) -> Optional[Schedule]:
+
+    def get_schedule_by_name(self, name: str) -> Schedule | None:
         """Get schedule by name."""
         for schedule in self.schedules:
             if schedule.name.lower() == name.lower():
                 return schedule
         return None
-    
-    def get_goal_by_name(self, name: str) -> Optional[Goal]:
+
+    def get_goal_by_name(self, name: str) -> Goal | None:
         """Get goal by name."""
         for goal in self.goals:
             if goal.name.lower() == name.lower():
                 return goal
         return None
-    
-    def to_dict(self) -> Dict[str, Any]:
+
+    def to_dict(self) -> dict[str, Any]:
         """Convert to dictionary for storage."""
         return {
             "user_id": self.user_id,

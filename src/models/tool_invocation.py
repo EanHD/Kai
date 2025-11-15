@@ -1,45 +1,45 @@
 """Tool invocation model for tracking tool execution."""
 
+import uuid
 from dataclasses import dataclass, field
 from datetime import datetime
-from typing import Optional, Dict, Any
-import uuid
+from typing import Any
 
 
 @dataclass
 class ToolInvocation:
     """Represents a tool execution with tracking and results."""
-    
+
     invocation_id: str = field(default_factory=lambda: str(uuid.uuid4()))
     query_message_id: str = ""
     tool_name: str = ""
     timestamp: datetime = field(default_factory=datetime.utcnow)
-    parameters: Dict[str, Any] = field(default_factory=dict)
-    result: Optional[Dict[str, Any]] = None
-    error: Optional[str] = None
+    parameters: dict[str, Any] = field(default_factory=dict)
+    result: dict[str, Any] | None = None
+    error: str | None = None
     execution_time_ms: int = 0
     status: str = "pending"  # pending, running, success, failed, timeout
     fallback_used: bool = False
-    
+
     def is_successful(self) -> bool:
         """Check if invocation was successful.
-        
+
         Returns:
             True if status is success
         """
         return self.status == "success"
-    
+
     def is_failed(self) -> bool:
         """Check if invocation failed.
-        
+
         Returns:
             True if status is failed or timeout
         """
         return self.status in ["failed", "timeout"]
-    
-    def to_dict(self) -> Dict[str, Any]:
+
+    def to_dict(self) -> dict[str, Any]:
         """Convert to dictionary for storage.
-        
+
         Returns:
             Dict representation
         """

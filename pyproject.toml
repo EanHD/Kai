@@ -60,6 +60,8 @@ select = [
 ignore = [
     "E501",  # line too long (handled by formatter)
     "B008",  # do not perform function calls in argument defaults
+    "E402",  # module level import not at top of file
+    "B904",  # raise from exception chaining
 ]
 
 [tool.ruff.format]

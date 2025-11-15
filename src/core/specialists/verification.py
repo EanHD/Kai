@@ -7,15 +7,27 @@ Routes to either:
 
 import json
 import logging
-from typing import Dict, Any, Optional
+from typing import Any
 
 from src.core.llm_connector import LLMConnector, Message
-from src.core.plan_types import VerificationResult, VerifiedSpecs, PackCalculation, RangeEstimate, Issue, Confidence, Source, ConfidenceLevel, TrustLevel
+from src.core.plan_types import (
+    Confidence,
+    ConfidenceLevel,
+    Issue,
+    PackCalculation,
+    RangeEstimate,
+    Source,
+    TrustLevel,
+    VerificationResult,
+    VerifiedSpecs,
+)
 
 logger = logging.getLogger(__name__)
 
 
 VERIFICATION_SPECIALIST_PROMPT = """You are Kai's verification specialist. You NEVER talk to the user directly. You only help the system verify and correct technical calculations.
+
+CONTEXT: You work for Kai, a practical AI assistant with memory, web search, and code execution capabilities. Kai is direct and honest, not a generic chatbot.
 
 You will receive:
 - The original user query
@@ -80,44 +92,44 @@ OR if verification fails:
 
 class SpecialistVerifier:
     """Handles verification using external specialist models."""
-    
+
     def __init__(
         self,
-        fast_connector: Optional[LLMConnector] = None,
-        strong_connector: Optional[LLMConnector] = None,
+        fast_connector: LLMConnector | None = None,
+        strong_connector: LLMConnector | None = None,
     ):
         """Initialize specialist verifier.
-        
+
         Args:
             fast_connector: Fast external model (Grok)
             strong_connector: Strong external model (Sonnet)
         """
         self.fast_connector = fast_connector
         self.strong_connector = strong_connector
-    
+
     async def verify(
         self,
         original_query: str,
-        plan: Dict[str, Any],
-        tool_results: Dict[str, Any],
-        sanity_result: Dict[str, Any],
+        plan: dict[str, Any],
+        tool_results: dict[str, Any],
+        sanity_result: dict[str, Any],
         use_strong_model: bool = False,
     ) -> VerificationResult:
         """Request verification from specialist model.
-        
+
         Args:
             original_query: User's original query
             plan: The execution plan dict
             tool_results: Results from tool executions
             sanity_result: Sanity check results
             use_strong_model: If True, use Sonnet; else use Grok
-            
+
         Returns:
             VerificationResult with structured data
         """
         # Choose connector
         connector = self.strong_connector if use_strong_model else self.fast_connector
-        
+
         if not connector:
             logger.warning(
                 f"No {'strong' if use_strong_model else 'fast'} connector available, "
@@ -127,10 +139,10 @@ class SpecialistVerifier:
                 error={
                     "type": "no_connector",
                     "message": "External model not configured",
-                    "suggested_action": "Answer with available data and note uncertainty"
+                    "suggested_action": "Answer with available data and note uncertainty",
                 }
             )
-        
+
         # Build escalation payload
         payload = {
             "task": "verify_and_correct_battery_analysis",
@@ -146,59 +158,59 @@ class SpecialistVerifier:
                 "strict_fields": True,
             },
         }
-        
+
         messages = [
             Message(role="system", content=VERIFICATION_SPECIALIST_PROMPT),
             Message(role="user", content=json.dumps(payload, indent=2)),
         ]
-        
+
         try:
             # Call specialist model
             model_name = "Sonnet" if use_strong_model else "Grok"
             logger.info(f"Calling {model_name} for verification")
-            
+
             response = await connector.generate(
                 messages=messages,
                 temperature=0.3,  # Low temp for accuracy
                 max_tokens=1000,
             )
-            
+
             # Parse JSON response
             verification_dict = self._parse_verification_json(response.content)
-            
+
             if not verification_dict:
                 logger.error("Failed to parse verification JSON")
                 return VerificationResult(
                     error={
                         "type": "parse_error",
                         "message": "Specialist returned invalid JSON",
-                        "suggested_action": "Use available data with uncertainty note"
+                        "suggested_action": "Use available data with uncertainty note",
                     }
                 )
-            
+
             # Check for error response
             if "error" in verification_dict:
                 return VerificationResult(error=verification_dict["error"])
-            
+
             # Convert to VerificationResult
             return self._dict_to_verification_result(verification_dict)
-            
+
         except Exception as e:
             logger.error(f"Verification failed: {e}", exc_info=True)
             return VerificationResult(
                 error={
                     "type": "exception",
                     "message": str(e),
-                    "suggested_action": "Answer with available data and note uncertainty"
+                    "suggested_action": "Answer with available data and note uncertainty",
                 }
             )
-    
-    def _parse_verification_json(self, response: str) -> Optional[Dict]:
+
+    def _parse_verification_json(self, response: str) -> dict | None:
         """Parse JSON from verification response.
-        
+
         Args:
             response: Raw response text
-            
+
         Returns:
             Parsed dict or None
         """
@@ -207,39 +219,40 @@ class SpecialistVerifier:
             return json.loads(response)
         except json.JSONDecodeError:
             pass
-        
+
         import re
-        json_pattern = r'```(?:json)?\s*(\{.*?\})\s*```'
+
+        json_pattern = r"```(?:json)?\s*(\{.*?\})\s*```"
         matches = re.findall(json_pattern, response, re.DOTALL)
-        
+
         if matches:
             try:
                 return json.loads(matches[0])
             except json.JSONDecodeError:
                 pass
-        
-        start = response.find('{')
-        end = response.rfind('}')
-        
+
+        start = response.find("{")
+        end = response.rfind("}")
+
         if start != -1 and end != -1 and end > start:
             try:
-                return json.loads(response[start:end+1])
+                return json.loads(response[start : end + 1])
             except json.JSONDecodeError:
                 pass
-        
+
         return None
-    
-    def _dict_to_verification_result(self, data: Dict) -> VerificationResult:
+
+    def _dict_to_verification_result(self, data: dict) -> VerificationResult:
         """Convert dict to VerificationResult.
-        
+
         Args:
             data: Parsed verification dict
-            
+
         Returns:
             VerificationResult object
         """
         result = VerificationResult()
-        
+
         # Parse verified_specs
         if "verified_specs" in data:
             specs_data = data["verified_specs"]
@@ -249,14 +262,16 @@ class SpecialistVerifier:
                     trust = TrustLevel(src.get("trust_level", "medium"))
                 except ValueError:
                     trust = TrustLevel.MEDIUM
-                
-                sources.append(Source(
-                    label=src.get("label", ""),
-                    url=src.get("url", ""),
-                    type=src.get("type", "other"),
-                    trust_level=trust,
-                ))
-            
+
+                sources.append(
+                    Source(
+                        label=src.get("label", ""),
+                        url=src.get("url", ""),
+                        type=src.get("type", "other"),
+                        trust_level=trust,
+                    )
+                )
+
             result.verified_specs = VerifiedSpecs(
                 cell_type=specs_data.get("cell_type", ""),
                 nominal_voltage_v=float(specs_data.get("nominal_voltage_v", 0)),
@@ -264,7 +279,7 @@ class SpecialistVerifier:
                 allowed_capacity_range_ah=specs_data.get("allowed_capacity_range_ah", {}),
                 sources=sources,
             )
-        
+
         # Parse pack_calculation
         if "pack_calculation" in data:
             calc = data["pack_calculation"]
@@ -276,7 +291,7 @@ class SpecialistVerifier:
                 pack_total_wh=float(calc.get("pack_total_wh", 0)),
                 pack_total_kwh=float(calc.get("pack_total_kwh", 0)),
             )
-        
+
         # Parse range_estimate
         if "range_estimate" in data:
             est = data["range_estimate"]
@@ -286,15 +301,17 @@ class SpecialistVerifier:
                 ideal_range_miles=float(est.get("ideal_range_miles", 0)),
                 realistic_range_miles=float(est.get("realistic_range_miles", 0)),
             )
-        
+
         # Parse issues
         for issue_data in data.get("issues", []):
-            result.issues.append(Issue(
-                field=issue_data.get("field", ""),
-                problem=issue_data.get("problem", ""),
-                severity=issue_data.get("severity", "info"),
-            ))
-        
+            result.issues.append(
+                Issue(
+                    field=issue_data.get("field", ""),
+                    problem=issue_data.get("problem", ""),
+                    severity=issue_data.get("severity", "info"),
+                )
+            )
+
         # Parse confidence
         if "confidence" in data:
             conf = data["confidence"]
@@ -305,12 +322,12 @@ class SpecialistVerifier:
                 range_conf = ConfidenceLevel(conf.get("range", "medium"))
             except ValueError:
                 overall = specs = math = range_conf = ConfidenceLevel.MEDIUM
-            
+
             result.confidence = Confidence(
                 overall=overall,
                 specs=specs,
                 math=math,
                 range=range_conf,
             )
-        
+
         return result

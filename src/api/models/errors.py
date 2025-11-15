@@ -1,19 +1,18 @@
 """OpenAI-compatible error models."""
 
-from typing import Optional, Literal
 from pydantic import BaseModel
 
 
 class OpenAIError(BaseModel):
     """OpenAI error object.
-    
+
     See: https://platform.openai.com/docs/guides/error-codes
     """
 
     message: str
     type: str
-    param: Optional[str] = None
-    code: Optional[str] = None
+    param: str | None = None
+    code: str | None = None
 
 
 class ErrorResponse(BaseModel):
@@ -45,17 +44,17 @@ ERROR_TYPE_SERVER = "server_error"
 def create_error_response(
     message: str,
     error_type: str = ERROR_TYPE_API_ERROR,
-    param: Optional[str] = None,
-    code: Optional[str] = None,
+    param: str | None = None,
+    code: str | None = None,
 ) -> ErrorResponse:
     """Create an OpenAI-formatted error response.
-    
+
     Args:
         message: Human-readable error message
         error_type: Type of error (see ERROR_TYPE_* constants)
         param: Parameter that caused the error (optional)
         code: Error code (optional)
-        
+
     Returns:
         ErrorResponse object
     """
@@ -69,7 +68,7 @@ def create_error_response(
     )
 
 
-def invalid_request_error(message: str, param: Optional[str] = None) -> ErrorResponse:
+def invalid_request_error(message: str, param: str | None = None) -> ErrorResponse:
     """Create invalid request error."""
     return create_error_response(message, ERROR_TYPE_INVALID_REQUEST, param=param)
 
@@ -79,7 +78,7 @@ def authentication_error(message: str = "Invalid API key") -> ErrorResponse:
     return create_error_response(message, ERROR_TYPE_AUTHENTICATION)
 
 
-def not_found_error(message: str, param: Optional[str] = None) -> ErrorResponse:
+def not_found_error(message: str, param: str | None = None) -> ErrorResponse:
     """Create not found error."""
     return create_error_response(message, ERROR_TYPE_NOT_FOUND, param=param)
 

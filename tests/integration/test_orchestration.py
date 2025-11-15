@@ -1,11 +1,16 @@
 """Integration tests for Orchestration pipeline."""
 
-import pytest
-import os
+import sys
+from pathlib import Path
+
+sys.path.insert(0, str(Path(__file__).parent.parent.parent))
+
 from unittest.mock import AsyncMock, MagicMock
 
-from src.core.orchestrator import Orchestrator
+import pytest
+
 from src.core.llm_connector import LLMConnector, LLMResponse
+from src.core.orchestrator import Orchestrator
 from src.models.conversation import ConversationSession
 
 
@@ -13,7 +18,7 @@ from src.models.conversation import ConversationSession
 def mock_local_connector():
     """Create mock local connector (Granite)."""
     connector = AsyncMock(spec=LLMConnector)
-    
+
     # Mock plan analyzer response (returns JSON plan)
     plan_response = LLMResponse(
         content='{"intent": "test", "complexity": "simple", "safety_level": "normal", "capabilities": [], "steps": [{"id": "finalize", "type": "finalization", "model": "granite", "description": "answer", "input": {}, "depends_on": [], "required": true}]}',
@@ -22,7 +27,7 @@ def mock_local_connector():
         model_used="granite",
         finish_reason="stop",
     )
-    
+
     # Mock presenter response (returns finalized answer)
     presenter_response = LLMResponse(
         content='{"final_answer": "Test answer from orchestration", "short_summary": "Test", "citations_used": []}',
@@ -31,9 +36,9 @@ def mock_local_connector():
         model_used="granite",
         finish_reason="stop",
     )
-    
+
     connector.generate = AsyncMock(side_effect=[plan_response, presenter_response])
-    
+
     return connector
 
 
@@ -59,9 +64,9 @@ def orchestrator(mock_local_connector):
 async def test_simple_query_pipeline(orchestrator, mock_conversation):
     """Test that simple query goes through orchestration pipeline."""
     query = "What is 2 + 2?"
-    
+
     response = await orchestrator.process_query(query, mock_conversation)
-    
+
     # Verify response
     assert response is not None
     assert response.content == "Test answer from orchestration"
@@ -72,19 +77,21 @@ async def test_error_fallback(mock_local_connector, mock_conversation):
     """Test that errors fall back gracefully."""
     # Make plan analyzer fail
     mock_local_connector.generate = AsyncMock(side_effect=Exception("Test error"))
-    
+
     orchestrator = Orchestrator(
         local_connector=mock_local_connector,
         external_connectors={},
         tools={},
     )
-    
+
     response = await orchestrator.process_query("test", mock_conversation)
-    
+
     # Should get fallback error message (could be from orchestrator or presenter)
     assert response is not None
-    assert ("issue processing your request" in response.content or 
-            "issue generating the final answer" in response.content)
+    assert (
+        "issue processing your request" in response.content
+        or "issue generating the final answer" in response.content
+    )
 
 
 @pytest.mark.asyncio
@@ -100,15 +107,15 @@ async def test_with_tools(mock_local_connector, mock_conversation):
             execution_time_ms=10,
         )
     )
-    
+
     orchestrator = Orchestrator(
         local_connector=mock_local_connector,
         external_connectors={},
         tools={"code_exec": mock_tool},
     )
-    
+
     response = await orchestrator.process_query("Calculate 2+2", mock_conversation)
-    
+
     # Should complete successfully
     assert response is not None
 
@@ -120,12 +127,12 @@ def test_orchestrator_initialization_components(mock_local_connector):
         external_connectors={},
         tools={},
     )
-    
+
     # Verify all components exist
-    assert hasattr(orchestrator, 'plan_analyzer')
-    assert hasattr(orchestrator, 'specialist_verifier')
-    assert hasattr(orchestrator, 'plan_executor')
-    assert hasattr(orchestrator, 'presenter')
+    assert hasattr(orchestrator, "plan_analyzer")
+    assert hasattr(orchestrator, "specialist_verifier")
+    assert hasattr(orchestrator, "plan_executor")
+    assert hasattr(orchestrator, "presenter")
 
 
 def test_specialist_connector_routing():
@@ -133,7 +140,7 @@ def test_specialist_connector_routing():
     mock_local = AsyncMock(spec=LLMConnector)
     mock_grok = AsyncMock(spec=LLMConnector)
     mock_claude = AsyncMock(spec=LLMConnector)
-    
+
     orchestrator = Orchestrator(
         local_connector=mock_local,
         external_connectors={
@@ -142,7 +149,7 @@ def test_specialist_connector_routing():
         },
         tools={},
     )
-    
+
     # Verify specialist verifier got correct connectors
     assert orchestrator.specialist_verifier.fast_connector is mock_grok
     assert orchestrator.specialist_verifier.strong_connector is mock_claude
@@ -152,10 +159,11 @@ def test_specialist_connector_routing():
 async def test_logging(orchestrator, mock_conversation, caplog):
     """Test that orchestration logs key events."""
     import logging
+
     caplog.set_level(logging.INFO)
-    
+
     await orchestrator.process_query("test query", mock_conversation)
-    
+
     # Check for key log messages
     log_text = caplog.text
     assert "Processing query" in log_text

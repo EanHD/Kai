@@ -1,12 +1,13 @@
 """OpenAI models list models."""
 
-from typing import List, Literal
+from typing import Literal
+
 from pydantic import BaseModel
 
 
 class Model(BaseModel):
     """Individual model object.
-    
+
     See: https://platform.openai.com/docs/api-reference/models/object
     """
 
@@ -18,9 +19,9 @@ class Model(BaseModel):
 
 class ModelList(BaseModel):
     """List of available models.
-    
+
     See: https://platform.openai.com/docs/api-reference/models/list
     """
 
     object: Literal["list"] = "list"
-    data: List[Model]
+    data: list[Model]

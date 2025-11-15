@@ -1,8 +1,8 @@
 """OpenAI chat completion models (Pydantic schemas)."""
 
-from typing import Any, Dict, List, Literal, Optional, Union
-from pydantic import BaseModel, Field
+from typing import Any, Literal
 
+from pydantic import BaseModel, Field
 
 # ============================================================================
 # Request Models
@@ -13,10 +13,10 @@ class Message(BaseModel):
     """Chat message in OpenAI format."""
 
     role: Literal["system", "user", "assistant", "tool"]
-    content: Optional[str] = None
-    name: Optional[str] = None
-    tool_calls: Optional[List[Dict[str, Any]]] = None
-    tool_call_id: Optional[str] = None
+    content: str | None = None
+    name: str | None = None
+    tool_calls: list[dict[str, Any]] | None = None
+    tool_call_id: str | None = None
 
 
 class FunctionCall(BaseModel):
@@ -38,41 +38,41 @@ class Tool(BaseModel):
     """Tool definition in OpenAI format."""
 
     type: Literal["function"]
-    function: Dict[str, Any]
+    function: dict[str, Any]
 
 
 class ChatCompletionRequest(BaseModel):
     """OpenAI chat completion request.
-    
+
     See: https://platform.openai.com/docs/api-reference/chat/create
     """
 
     # Required
     model: str
-    messages: List[Message]
+    messages: list[Message]
 
     # Optional parameters
-    temperature: Optional[float] = Field(default=1.0, ge=0.0, le=2.0)
-    top_p: Optional[float] = Field(default=1.0, ge=0.0, le=1.0)
-    n: Optional[int] = Field(default=1, ge=1, le=10)
-    stream: Optional[bool] = False
-    stop: Optional[Union[str, List[str]]] = None
-    max_tokens: Optional[int] = Field(default=None, ge=1)
-    presence_penalty: Optional[float] = Field(default=0.0, ge=-2.0, le=2.0)
-    frequency_penalty: Optional[float] = Field(default=0.0, ge=-2.0, le=2.0)
-    logit_bias: Optional[Dict[str, float]] = None
-    user: Optional[str] = None
+    temperature: float | None = Field(default=1.0, ge=0.0, le=2.0)
+    top_p: float | None = Field(default=1.0, ge=0.0, le=1.0)
+    n: int | None = Field(default=1, ge=1, le=10)
+    stream: bool | None = False
+    stop: str | list[str] | None = None
+    max_tokens: int | None = Field(default=None, ge=1)
+    presence_penalty: float | None = Field(default=0.0, ge=-2.0, le=2.0)
+    frequency_penalty: float | None = Field(default=0.0, ge=-2.0, le=2.0)
+    logit_bias: dict[str, float] | None = None
+    user: str | None = None
 
     # Tool/function calling
-    tools: Optional[List[Tool]] = None
-    tool_choice: Optional[Union[str, Dict[str, Any]]] = None
+    tools: list[Tool] | None = None
+    tool_choice: str | dict[str, Any] | None = None
 
     # Response format
-    response_format: Optional[Dict[str, str]] = None
+    response_format: dict[str, str] | None = None
 
     # Legacy function calling (deprecated but supported)
-    functions: Optional[List[Dict[str, Any]]] = None
-    function_call: Optional[Union[str, Dict[str, str]]] = None
+    functions: list[dict[str, Any]] | None = None
+    function_call: str | dict[str, str] | None = None
 
 
 # ============================================================================
@@ -93,12 +93,12 @@ class Choice(BaseModel):
 
     index: int
     message: Message
-    finish_reason: Optional[Literal["stop", "length", "tool_calls", "content_filter"]]
+    finish_reason: Literal["stop", "length", "tool_calls", "content_filter"] | None
 
 
 class ChatCompletionResponse(BaseModel):
     """OpenAI chat completion response.
-    
+
     See: https://platform.openai.com/docs/api-reference/chat/object
     """
 
@@ -106,9 +106,9 @@ class ChatCompletionResponse(BaseModel):
     object: Literal["chat.completion"] = "chat.completion"
     created: int
     model: str
-    choices: List[Choice]
+    choices: list[Choice]
     usage: Usage
-    system_fingerprint: Optional[str] = None
+    system_fingerprint: str | None = None
 
 
 # ============================================================================
@@ -119,9 +119,9 @@ class ChatCompletionResponse(BaseModel):
 class DeltaMessage(BaseModel):
     """Delta message for streaming chunks."""
 
-    role: Optional[Literal["system", "user", "assistant", "tool"]] = None
-    content: Optional[str] = None
-    tool_calls: Optional[List[Dict[str, Any]]] = None
+    role: Literal["system", "user", "assistant", "tool"] | None = None
+    content: str | None = None
+    tool_calls: list[dict[str, Any]] | None = None
 
 
 class StreamChoice(BaseModel):
@@ -129,12 +129,12 @@ class StreamChoice(BaseModel):
 
     index: int
     delta: DeltaMessage
-    finish_reason: Optional[Literal["stop", "length", "tool_calls", "content_filter"]] = None
+    finish_reason: Literal["stop", "length", "tool_calls", "content_filter"] | None = None
 
 
 class ChatCompletionChunk(BaseModel):
     """Streaming chunk in OpenAI format.
-    
+
     See: https://platform.openai.com/docs/api-reference/chat/streaming
     """
 
@@ -142,5 +142,5 @@ class ChatCompletionChunk(BaseModel):
     object: Literal["chat.completion.chunk"] = "chat.completion.chunk"
     created: int
     model: str
-    choices: List[StreamChoice]
-    system_fingerprint: Optional[str] = None
+    choices: list[StreamChoice]
+    system_fingerprint: str | None = None

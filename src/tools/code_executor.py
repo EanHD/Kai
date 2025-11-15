@@ -10,13 +10,12 @@ Implements T076-T079, T082-T084:
 
 import asyncio
 import hashlib
-import json
 import logging
-from typing import Any, Dict, Optional
+from typing import Any
 
-import docker
 from docker.errors import DockerException, ImageNotFound, NotFound
 
+import docker
 from src.tools.base_tool import BaseTool, ToolResult, ToolStatus
 
 logger = logging.getLogger(__name__)
@@ -25,7 +24,7 @@ logger = logging.getLogger(__name__)
 class CodeExecutorTool(BaseTool):
     """Execute Python code in isolated Docker containers."""
 
-    def __init__(self, config: Dict[str, Any]):
+    def __init__(self, config: dict[str, Any]):
         """
         Initialize code executor with Docker client.
 
@@ -89,7 +88,7 @@ class CodeExecutorTool(BaseTool):
         except Exception as e:
             logger.warning(f"Failed to detect gVisor runtime: {e}")
 
-    async def execute(self, parameters: Dict[str, Any]) -> ToolResult:
+    async def execute(self, parameters: dict[str, Any]) -> ToolResult:
         """
         Execute Python code in sandboxed Docker container.
 
@@ -101,7 +100,8 @@ class CodeExecutorTool(BaseTool):
         """
         if not self.docker_client:
             return ToolResult(
-                status=ToolStatus.ERROR,
+                tool_name=self.tool_name,
+                status=ToolStatus.FAILED,
                 error="Docker client not available. Ensure Docker is running.",
                 fallback_used=True,
             )
@@ -109,7 +109,9 @@ class CodeExecutorTool(BaseTool):
         code = parameters.get("code", "").strip()
         if not code:
             return ToolResult(
-                status=ToolStatus.ERROR, error="No code provided for execution"
+                tool_name=self.tool_name,
+                status=ToolStatus.FAILED,
+                error="No code provided for execution",
             )
 
         # Generate unique container name
@@ -124,7 +126,7 @@ class CodeExecutorTool(BaseTool):
             )
             return result
 
-        except asyncio.TimeoutError:
+        except TimeoutError:
             logger.warning(f"Code execution timed out after {self.timeout_seconds}s")
             # Cleanup timed-out container
             await self._cleanup_container(container_name)
@@ -135,9 +137,7 @@ class CodeExecutorTool(BaseTool):
             await self._cleanup_container(container_name)
             return self._execution_fallback(code, str(e))
 
-    async def _run_code_in_container(
-        self, code: str, container_name: str
-    ) -> ToolResult:
+    async def _run_code_in_container(self, code: str, container_name: str) -> ToolResult:
         """
         Run code in Docker container with security constraints.
 
@@ -189,12 +189,14 @@ class CodeExecutorTool(BaseTool):
 
             if exit_code == 0:
                 return ToolResult(
+                    tool_name=self.tool_name,
                     status=ToolStatus.SUCCESS,
                     data={"stdout": stdout, "stderr": stderr, "exit_code": exit_code},
                 )
             else:
                 return ToolResult(
-                    status=ToolStatus.ERROR,
+                    tool_name=self.tool_name,
+                    status=ToolStatus.FAILED,
                     error=f"Code execution failed with exit code {exit_code}",
                     data={"stdout": stdout, "stderr": stderr, "exit_code": exit_code},
                 )
@@ -223,10 +225,7 @@ class CodeExecutorTool(BaseTool):
         stderr_lines = []
 
         for line in lines:
-            if any(
-                err in line.lower()
-                for err in ["error", "traceback", "exception", "warning"]
-            ):
+            if any(err in line.lower() for err in ["error", "traceback", "exception", "warning"]):
                 stderr_lines.append(line)
             else:
                 stdout_lines.append(line)
@@ -255,7 +254,8 @@ class CodeExecutorTool(BaseTool):
             ToolResult with timeout error and suggestion
         """
         return ToolResult(
-            status=ToolStatus.ERROR,
+            tool_name=self.tool_name,
+            status=ToolStatus.TIMEOUT,
             error=f"Code execution timed out after {self.timeout_seconds}s",
             data={
                 "suggestion": "Try simplifying the code or breaking it into smaller steps",
@@ -291,7 +291,8 @@ class CodeExecutorTool(BaseTool):
             suggestions.append("Try rewriting the code with error handling.")
 
         return ToolResult(
-            status=ToolStatus.ERROR,
+            tool_name=self.tool_name,
+            status=ToolStatus.FAILED,
             error=f"Code execution failed: {error_msg}",
             data={
                 "suggestions": suggestions,
@@ -300,7 +301,7 @@ class CodeExecutorTool(BaseTool):
             fallback_used=True,
         )
 
-    async def fallback(self, parameters: Dict[str, Any], error: Exception) -> ToolResult:
+    async def fallback(self, parameters: dict[str, Any], error: Exception) -> ToolResult:
         """
         Fallback when Docker is unavailable.
 
@@ -312,7 +313,8 @@ class CodeExecutorTool(BaseTool):
             ToolResult explaining Docker unavailability
         """
         return ToolResult(
-            status=ToolStatus.ERROR,
+            tool_name=self.tool_name,
+            status=ToolStatus.FAILED,
             error="Code execution unavailable - Docker service is not running",
             data={
                 "suggestion": "Start Docker service to enable code execution",

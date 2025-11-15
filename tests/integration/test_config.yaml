@@ -1,0 +1,180 @@
+# Integration test configuration for orchestration testing
+# Uses real API tokens from environment variables for end-to-end validation
+
+models:
+  # Local model for planning
+  granite:
+    model_id: granite4-micro
+    model_name: granite4:micro-h
+    provider: ollama
+    base_url: http://localhost:11434
+    context_window: 2000000
+    cost_per_1k_input: 0.0
+    cost_per_1k_output: 0.0
+    priority: 10
+    capabilities:
+      - chat
+      - function_calling
+    
+  # Fast external model for quick verification
+  grok-fast:
+    provider: openrouter
+    model_name: x-ai/grok-2-1212
+    api_key_env: OPENROUTER_API_KEY
+    priority: 8
+    cost_per_1k_input: 0.002
+    cost_per_1k_output: 0.010
+    max_tokens: 4000
+    
+  # Strong model for complex reasoning
+  claude-sonnet:
+    provider: openrouter
+    model_name: anthropic/claude-3.5-sonnet
+    api_key_env: OPENROUTER_API_KEY
+    priority: 5
+    cost_per_1k_input: 0.003
+    cost_per_1k_output: 0.015
+    max_tokens: 8000
+
+tools:
+  web_search:
+    enabled: true
+    provider: brave
+    api_key_env: BRAVE_API_KEY
+    max_results: 5
+    fallback_enabled: true
+    
+  code_exec:
+    enabled: true
+    timeout_seconds: 10
+    max_memory_mb: 256
+    allowed_modules:
+      - math
+      - json
+      - re
+      - datetime
+    
+  rag:
+    enabled: true
+    vector_store_path: data/vectors
+    
+  sentiment:
+    enabled: true
+    provider: local  # Uses local heuristics
+
+cost_limits:
+  # Very low limits for testing cost-aware behavior
+  default_limit_usd: 1.0
+  soft_cap_threshold: 0.8  # 80%
+  
+  # Test-specific limits
+  test_soft_cap_limit_usd: 0.05  # Trigger after ~2-3 external calls
+  test_hard_cap_limit_usd: 0.10  # Block after ~5-6 external calls
+
+test_scenarios:
+  # Implicit tool routing tests
+  web_search_implicit:
+    - query: "What's the capacity of Panasonic NCR18650B cells?"
+      expected_tools: ["web_search"]
+      expected_complexity: "moderate"
+      
+    - query: "Compare energy density of LiFePO4 vs NMC chemistry"
+      expected_tools: ["web_search"]
+      expected_complexity: "moderate"
+      
+    - query: "What are the latest Tesla battery specifications?"
+      expected_tools: ["web_search"]
+      expected_complexity: "moderate"
+      
+  code_exec_implicit:
+    - query: "If a 13S4P pack uses 3400mAh cells at 3.6V nominal, how much total energy in kWh?"
+      expected_tools: ["code_exec"]
+      expected_complexity: "moderate"
+      should_have_sanity_check: true
+      
+    - query: "Battery with 52V and 20Ah, what's the watt-hours?"
+      expected_tools: ["code_exec"]
+      expected_complexity: "simple"
+      should_have_sanity_check: true
+      
+    - query: "Calculate range for 5kWh battery with 100Wh/mile efficiency over 250 mile trip"
+      expected_tools: ["code_exec"]
+      expected_complexity: "moderate"
+      should_have_sanity_check: true
+      
+  multi_tool:
+    - query: "Find the Samsung 50E specs and calculate energy for a 14S5P pack"
+      expected_tools: ["web_search", "code_exec"]
+      expected_complexity: "complex"
+      should_have_sanity_check: true
+      
+    - query: "Look up Molicel P42A capacity and verify if 13S4P gives 2.5kWh"
+      expected_tools: ["web_search", "code_exec"]
+      expected_complexity: "complex"
+      should_have_sanity_check: true
+      
+  memory_ops:
+    - query: "Remember that I prefer LG M50LT cells for my projects"
+      expected_tools: ["rag"]
+      expected_complexity: "simple"
+      
+    - query: "What cell type do I prefer?"
+      expected_tools: ["rag"]
+      expected_complexity: "simple"
+
+  # Model tier selection tests
+  model_tiers:
+    granite_only:
+      - query: "What's 25 times 4?"
+        max_external_calls: 0
+        
+      - query: "Hello, how are you?"
+        max_external_calls: 0
+        
+    grok_verification:
+      - query: "13S4P with 3400mAh at 3.6V - verify the calculation gives 0.64kWh"
+        complexity: "moderate"
+        should_use_fast_model: true
+        should_use_strong_model: false
+        
+    sonnet_verification:
+      - query: "Double-check this critical calculation: 14S5P × 5000mAh × 3.6V with detailed verification"
+        complexity: "complex"
+        safety_level: "high"
+        should_use_strong_model: true
+
+  # Cost-aware routing tests
+  cost_behavior:
+    soft_cap:
+      initial_limit: 0.05
+      threshold: 0.8
+      queries:
+        - "Find Tesla 4680 specs"  # ~$0.01
+        - "Calculate 12S2P with 4850mAh"  # ~$0.01
+        - "Verify Panasonic NCR18650B capacity"  # Should warn about soft cap
+        - "Compare LG vs Samsung cells"  # Should still work but warn
+        
+    hard_cap:
+      initial_limit: 0.10
+      threshold: 0.8
+      queries:
+        - "Find Tesla 4680 specs"
+        - "Find Panasonic NCR18650GA specs"
+        - "Find Samsung 50E specs"
+        - "Find LG M50LT specs"
+        - "Find Molicel P42A specs"
+        - "Find Sony VTC6 specs"  # Should hit hard cap
+        - "What's 2+2?"  # Should still work (local only)
+
+expected_token_budgets:
+  # Approximate token usage per query type
+  simple_local: 200  # Just Granite plan + present
+  moderate_with_tool: 500  # Granite plan + tool + Granite present
+  complex_with_verification: 1500  # Granite plan + tools + Grok/Sonnet + Granite present
+  
+json_efficiency:
+  # LLM-to-LLM should use JSON, not natural language
+  analyzer_to_executor: "json"
+  executor_to_specialist: "json"
+  specialist_to_presenter: "json"
+  presenter_to_user: "natural_language"

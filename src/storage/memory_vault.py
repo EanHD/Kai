@@ -9,14 +9,15 @@ tags, summary, and payload (arbitrary dict specific to the type).
 
 from __future__ import annotations
 
-from dataclasses import dataclass, asdict, field
+import builtins
+import json
+import os
+import uuid
+from collections.abc import Iterable
+from dataclasses import asdict, dataclass, field
 from datetime import datetime, timedelta
 from pathlib import Path
-from typing import Any, Dict, Iterable, List, Optional
-import json
-import uuid
-import os
-
+from typing import Any
 
 MEMORY_TYPES = {
     "episodic": "episodic.jsonl",
@@ -34,21 +35,21 @@ class MemoryRecord:
     id: str
     type: str
     created_at: str
-    last_used_at: Optional[str] = None
-    confidence: Optional[float] = None
-    ttl_days: Optional[int] = None
-    tags: List[str] = field(default_factory=list)
-    summary: Optional[str] = None
-    payload: Dict[str, Any] = field(default_factory=dict)
+    last_used_at: str | None = None
+    confidence: float | None = None
+    ttl_days: int | None = None
+    tags: list[str] = field(default_factory=list)
+    summary: str | None = None
+    payload: dict[str, Any] = field(default_factory=dict)
 
-    def to_dict(self) -> Dict[str, Any]:
+    def to_dict(self) -> dict[str, Any]:
         return asdict(self)
 
 
 class MemoryVault:
     """Simple JSONL-based memory store with user-owned files."""
 
-    def __init__(self, user_id: str, base_dir: Optional[str] = None):
+    def __init__(self, user_id: str, base_dir: str | None = None):
         self.user_id = user_id
         base = base_dir or os.environ.get("MEMORY_VAULT_DIR", "data/memory")
         self.root = Path(base) / user_id
@@ -63,12 +64,12 @@ class MemoryVault:
     def add(
         self,
         mtype: str,
-        payload: Dict[str, Any],
+        payload: dict[str, Any],
         *,
-        summary: Optional[str] = None,
-        confidence: Optional[float] = None,
-        ttl_days: Optional[int] = None,
-        tags: Optional[List[str]] = None,
+        summary: str | None = None,
+        confidence: float | None = None,
+        ttl_days: int | None = None,
+        tags: builtins.list[str] | None = None,
     ) -> MemoryRecord:
         rec = MemoryRecord(
             id=str(uuid.uuid4()),
@@ -92,10 +93,10 @@ class MemoryVault:
         session_id: str,
         user_text: str,
         assistant_text: str,
-        success: Optional[bool] = None,
-        summary: Optional[str] = None,
-        confidence: Optional[float] = None,
-        tags: Optional[List[str]] = None,
+        success: bool | None = None,
+        summary: str | None = None,
+        confidence: float | None = None,
+        tags: builtins.list[str] | None = None,
     ) -> MemoryRecord:
         payload = {
             "session_id": session_id,
@@ -111,20 +112,20 @@ class MemoryVault:
             ttl_days=90,
             tags=tags,
         )
-    
+
     async def write_episodic(
         self,
         *,
         session_id: str,
         user_text: str,
         assistant_text: str,
-        success: Optional[bool] = None,
-        summary: Optional[str] = None,
-        confidence: Optional[float] = None,
-        tags: Optional[List[str]] = None,
+        success: bool | None = None,
+        summary: str | None = None,
+        confidence: float | None = None,
+        tags: builtins.list[str] | None = None,
     ) -> MemoryRecord:
         """Async wrapper for add_episode to support reflection agent.
-        
+
         Args:
             session_id: Session identifier
             user_text: User's input
@@ -133,7 +134,7 @@ class MemoryVault:
             summary: Brief summary of episode
             confidence: Confidence score (0.0-1.0)
             tags: List of tags for categorization
-            
+
         Returns:
             Created MemoryRecord
         """
@@ -150,17 +151,17 @@ class MemoryVault:
     def list(
         self,
         *,
-        mtype: Optional[str] = None,
-        limit: Optional[int] = None,
-        tag: Optional[str] = None,
-    ) -> List[Dict[str, Any]]:
+        mtype: str | None = None,
+        limit: int | None = None,
+        tag: str | None = None,
+    ) -> builtins.list[dict[str, Any]]:
         paths: Iterable[Path]
         if mtype:
             paths = [self._path_for_type(mtype)]
         else:
             paths = [(self.root / name) for name in MEMORY_TYPES.values()]
 
-        results: List[Dict[str, Any]] = []
+        results: list[dict[str, Any]] = []
         for p in paths:
             if not p.exists():
                 continue
@@ -201,18 +202,18 @@ class MemoryVault:
         out_file.write_text(out_text, encoding="utf-8")
         return str(out_file)
 
-    def prune(self) -> Dict[str, int]:
+    def prune(self) -> dict[str, int]:
         """Delete memories that have expired based on ttl_days and low-confidence heuristic.
 
         Returns a count of removed items per type.
         """
-        removed: Dict[str, int] = {t: 0 for t in MEMORY_TYPES}
+        removed: dict[str, int] = dict.fromkeys(MEMORY_TYPES, 0)
         now = datetime.utcnow()
         for mtype, filename in MEMORY_TYPES.items():
             path = self.root / filename
             if not path.exists():
                 continue
-            new_lines: List[str] = []
+            new_lines: list[str] = []
             with path.open("r", encoding="utf-8") as f:
                 for line in f:
                     try:
@@ -235,7 +236,11 @@ class MemoryVault:
                     stale = False
                     if conf is not None and conf < 0.2:
                         try:
-                            dt2 = datetime.fromisoformat(last_used_at) if last_used_at else datetime.fromisoformat(created_at)
+                            dt2 = (
+                                datetime.fromisoformat(last_used_at)
+                                if last_used_at
+                                else datetime.fromisoformat(created_at)
+                            )
                             if now - dt2 > timedelta(days=30):
                                 stale = True
                         except Exception:

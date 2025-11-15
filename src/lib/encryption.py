@@ -1,15 +1,14 @@
 """Encryption utilities for data-at-rest protection using AES-256."""
 
-import hashlib
-import os
-from cryptography.hazmat.primitives.ciphers import Cipher, algorithms, modes
-from cryptography.hazmat.backends import default_backend
-from cryptography.hazmat.primitives import padding
-from cryptography.hazmat.primitives.kdf.pbkdf2 import PBKDF2HMAC
-from cryptography.hazmat.primitives import hashes
 import base64
-from typing import Tuple
+import hashlib
 import logging
+import os
+
+from cryptography.hazmat.backends import default_backend
+from cryptography.hazmat.primitives import hashes, padding
+from cryptography.hazmat.primitives.ciphers import Cipher, algorithms, modes
+from cryptography.hazmat.primitives.kdf.pbkdf2 import PBKDF2HMAC
 
 logger = logging.getLogger(__name__)
 
@@ -19,7 +18,7 @@ class EncryptionManager:
 
     def __init__(self, master_key: str):
         """Initialize encryption manager.
-        
+
         Args:
             master_key: Master encryption key (from environment or user input)
         """
@@ -28,10 +27,10 @@ class EncryptionManager:
 
     def _derive_key(self, salt: bytes) -> bytes:
         """Derive encryption key from master key using PBKDF2.
-        
+
         Args:
             salt: Random salt for key derivation
-            
+
         Returns:
             32-byte derived key for AES-256
         """
@@ -46,10 +45,10 @@ class EncryptionManager:
 
     def encrypt(self, plaintext: str) -> str:
         """Encrypt plaintext data.
-        
+
         Args:
             plaintext: Data to encrypt
-            
+
         Returns:
             Base64-encoded ciphertext with salt and IV
             Format: base64(salt:iv:ciphertext)
@@ -60,33 +59,31 @@ class EncryptionManager:
         # Generate random salt and IV
         salt = os.urandom(16)
         iv = os.urandom(16)
-        
+
         # Derive encryption key
         key = self._derive_key(salt)
-        
+
         # Pad plaintext to block size (128 bits for AES)
         padder = padding.PKCS7(128).padder()
         padded_data = padder.update(plaintext.encode()) + padder.finalize()
-        
+
         # Encrypt
-        cipher = Cipher(
-            algorithms.AES(key), modes.CBC(iv), backend=self.backend
-        )
+        cipher = Cipher(algorithms.AES(key), modes.CBC(iv), backend=self.backend)
         encryptor = cipher.encryptor()
         ciphertext = encryptor.update(padded_data) + encryptor.finalize()
-        
+
         # Combine salt:iv:ciphertext and encode
         combined = salt + iv + ciphertext
-        encoded = base64.b64encode(combined).decode('utf-8')
-        
+        encoded = base64.b64encode(combined).decode("utf-8")
+
         return encoded
 
     def decrypt(self, encrypted_data: str) -> str:
         """Decrypt encrypted data.
-        
+
         Args:
             encrypted_data: Base64-encoded ciphertext with salt and IV
-            
+
         Returns:
             Decrypted plaintext
         """
@@ -95,27 +92,25 @@ class EncryptionManager:
 
         try:
             # Decode and extract components
-            combined = base64.b64decode(encrypted_data.encode('utf-8'))
+            combined = base64.b64decode(encrypted_data.encode("utf-8"))
             salt = combined[:16]
             iv = combined[16:32]
             ciphertext = combined[32:]
-            
+
             # Derive decryption key
             key = self._derive_key(salt)
-            
+
             # Decrypt
-            cipher = Cipher(
-                algorithms.AES(key), modes.CBC(iv), backend=self.backend
-            )
+            cipher = Cipher(algorithms.AES(key), modes.CBC(iv), backend=self.backend)
             decryptor = cipher.decryptor()
             padded_plaintext = decryptor.update(ciphertext) + decryptor.finalize()
-            
+
             # Unpad
             unpadder = padding.PKCS7(128).unpadder()
             plaintext = unpadder.update(padded_plaintext) + unpadder.finalize()
-            
-            return plaintext.decode('utf-8')
-        
+
+            return plaintext.decode("utf-8")
+
         except Exception as e:
             logger.error(f"Decryption failed: {e}")
             raise ValueError("Failed to decrypt data - invalid key or corrupted data")
@@ -123,10 +118,10 @@ class EncryptionManager:
     @staticmethod
     def hash_key(key: str) -> str:
         """Generate SHA-256 hash of key for storage.
-        
+
         Args:
             key: Key to hash
-            
+
         Returns:
             Hexadecimal hash string
         """
@@ -135,21 +130,21 @@ class EncryptionManager:
     @staticmethod
     def generate_key() -> str:
         """Generate a secure random encryption key.
-        
+
         Returns:
             Base64-encoded random key (32 bytes)
         """
         random_bytes = os.urandom(32)
-        return base64.b64encode(random_bytes).decode('utf-8')
+        return base64.b64encode(random_bytes).decode("utf-8")
 
 
 def encrypt_field(data: str, encryption_key: str) -> str:
     """Helper function to encrypt a single field.
-    
+
     Args:
         data: Plaintext data
         encryption_key: Encryption key
-        
+
     Returns:
         Encrypted data
     """
@@ -159,11 +154,11 @@ def encrypt_field(data: str, encryption_key: str) -> str:
 
 def decrypt_field(encrypted_data: str, encryption_key: str) -> str:
     """Helper function to decrypt a single field.
-    
+
     Args:
         encrypted_data: Encrypted data
         encryption_key: Decryption key
-        
+
     Returns:
         Decrypted plaintext
     """

@@ -86,6 +86,13 @@ async def lifespan(app: FastAPI):
         cost_limit=100.0,  # High limit for API usage
         soft_cap_threshold=0.8,
     )
+    
+    # Inject conversation service for memory (create simple conversation service for API)
+    from src.core.conversation_service import ConversationService
+    conversation_service = ConversationService(storage)
+    orchestrator.conversation_service = conversation_service
+    app.state.conversation_service = conversation_service
+    
     app.state.orchestrator = orchestrator
     
     # Initialize reflection agent for continuous learning (always-on)
