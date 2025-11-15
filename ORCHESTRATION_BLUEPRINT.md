@@ -46,76 +46,51 @@ Implemented:
 
 ---
 
-## 🚧 Phase 4: Plan Executor (IN PROGRESS)
+## ✅ Phase 4: Plan Executor (COMPLETE)
 
-**File**: `src/core/plan_executor.py` (TO CREATE)
+**File**: `src/core/plan_executor.py`
 
-Needs:
-- Dependency resolution (topological sort)
-- Step execution loop
-- Tool call dispatcher
+Implemented:
+- `PlanExecutor` class with full dependency resolution
+- Topological sort for correct step ordering
+- Tool call dispatcher with input resolution
 - Sanity check integration
-- Specialist escalation logic
-- Result aggregation
+- Smart specialist escalation (Grok vs Sonnet routing)
+- Reference resolution (FROM_step_id syntax)
+- Graceful error handling
+- Circular dependency detection
 
-Pseudocode:
-```python
-class PlanExecutor:
-    async def execute(self, plan: Plan) -> Dict[str, Any]:
-        tool_results = {}
-        specialist_results = {}
-        
-        # Resolve step dependencies
-        ordered_steps = self._topological_sort(plan.steps)
-        
-        for step in ordered_steps:
-            if step.type == StepType.TOOL_CALL:
-                result = await self._execute_tool(step, tool_results)
-                tool_results[step.id] = result
-            
-            elif step.type == StepType.SANITY_CHECK:
-                result = self._run_sanity_check(step, tool_results)
-                if result["suspicious"]:
-                    # Escalate to specialist
-                    verification = await self._escalate(plan, tool_results, result)
-                    specialist_results["verification"] = verification
-            
-            elif step.type == StepType.MODEL_CALL:
-                # Call external reasoner (Grok/Sonnet)
-                result = await self._call_specialist(step, tool_results)
-                specialist_results[step.id] = result
-        
-        return {
-            "tool_results": tool_results,
-            "specialist_results": specialist_results,
-        }
-```
+**Key Features**:
+- Executes steps in dependency order
+- Routes to Grok Fast for normal queries
+- Routes to Sonnet Strong for sanity failures or high safety
+- Resolves references between steps
+- Handles missing tools gracefully
+
+**Status**: Ready for use ✅
 
 ---
 
-## 🚧 Phase 5: Presenter/Finalizer (IN PROGRESS)
+## ✅ Phase 5: Presenter/Finalizer (COMPLETE)
 
-**File**: `src/core/presenters/granite_presenter.py` (TO CREATE)
+**File**: `src/core/presenters/granite_presenter.py`
 
-Needs:
-- Finalization prompt for Granite
-- Takes structured results + generates natural language
-- Citation integration
-- Confidence-aware tone
-- Consistent "Kai voice"
+Implemented:
+- `GranitePresenter` class using Granite for finalization
+- Finalization prompt for natural language generation
+- Citation extraction from tool/specialist results
+- Confidence-aware tone adjustments
+- JSON-only response format with fallback
+- Consistent Kai voice maintenance
 
-Prompt template:
-```
-System: You are Kai's voice. Take structured results and create a clear answer.
-- Use only provided data
-- Explain step-by-step but concisely
-- Mention uncertainty if confidence < high
-- Use citations [1], [2]
-- Keep tone: practical, direct, helpful
+**Key Features**:
+- Takes structured results → generates natural language
+- Auto-extracts and numbers citations [1], [2]
+- Adjusts tone based on confidence levels
+- Falls back gracefully when finalization fails
+- Maintains consistent Kai voice across all responses
 
-Input: <FinalizationInput JSON>
-Output: <FinalizationOutput JSON>
-```
+**Status**: Ready for use ✅
 
 ---
 
@@ -176,18 +151,19 @@ Changes needed:
 
 ## 🎯 Implementation Priority
 
-### Week 1: Core Execution
+### Week 1: Core Execution ✅ COMPLETE
 1. ✅ Plan types
 2. ✅ Plan analyzer
 3. ✅ Specialist verifier
-4. ⏳ Plan executor (dependency resolution + tool dispatch)
-5. ⏳ Basic testing
+4. ✅ Plan executor (dependency resolution + tool dispatch)
+5. ✅ Granite presenter
+6. ✅ Basic unit testing (43 tests passing)
 
-### Week 2: Finalization & Integration
-1. ⏳ Granite presenter
-2. ⏳ Orchestrator v2 integration
-3. ⏳ Feature flag + backward compat
-4. ⏳ Comprehensive testing
+### Week 2: Integration & Testing ⏳ IN PROGRESS
+1. ⏳ Orchestrator v2 integration
+2. ⏳ Feature flag + backward compat
+3. ⏳ Integration tests (battery query, etc.)
+4. ⏳ End-to-end testing
 
 ### Week 3: Polish & Production
 1. ⏳ Response time optimization
