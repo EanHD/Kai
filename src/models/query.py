@@ -2,7 +2,7 @@
 
 import uuid
 from dataclasses import dataclass, field
-from datetime import datetime
+from datetime import UTC, datetime
 from typing import Any
 
 
@@ -12,7 +12,7 @@ class Query:
 
     query_id: str = field(default_factory=lambda: str(uuid.uuid4()))
     session_id: str = ""
-    timestamp: datetime = field(default_factory=datetime.utcnow)
+    timestamp: datetime = field(default_factory=lambda: datetime.now(UTC))
     raw_text: str = ""
     source: str = "api"  # "cli" or "api" - where the query originated
     complexity_level: str = "simple"  # simple, moderate, complex

@@ -205,9 +205,22 @@ class Orchestrator:
             # Step 2: Execute → Results
             execution_results = await self.plan_executor.execute(plan)
 
+            # Defensive: ensure execution_results is a dict
+            if not isinstance(execution_results, dict):
+                logger.error(f"Unexpected execution_results type: {type(execution_results)}")
+                execution_results = {"tool_results": {}, "specialist_results": {}}
+
             # Log tool and model usage
             tool_results = execution_results.get("tool_results", {})
             specialist_results = execution_results.get("specialist_results", {})
+
+            # Defensive: ensure results are dicts
+            if not isinstance(tool_results, dict):
+                logger.warning(f"tool_results is not a dict: {type(tool_results)}, using empty dict")
+                tool_results = {}
+            if not isinstance(specialist_results, dict):
+                logger.warning(f"specialist_results is not a dict: {type(specialist_results)}, using empty dict")
+                specialist_results = {}
 
             # tool_results and specialist_results are dicts, not lists
             tools_used = (

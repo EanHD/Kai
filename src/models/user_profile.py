@@ -65,8 +65,8 @@ class UserProfile:
     """User profile with preferences, schedules, and goals."""
 
     user_id: str = field(default_factory=lambda: str(uuid.uuid4()))
-    created_at: datetime = field(default_factory=datetime.utcnow)
-    updated_at: datetime = field(default_factory=datetime.utcnow)
+    created_at: datetime = field(default_factory=lambda: datetime.now(UTC))
+    updated_at: datetime = field(default_factory=lambda: datetime.now(UTC))
     preferences: dict[str, Any] = field(default_factory=dict)
     schedules: list[Schedule] = field(default_factory=list)
     goals: list[Goal] = field(default_factory=list)

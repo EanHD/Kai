@@ -45,9 +45,9 @@ class ConversationSession:
 
     session_id: str = field(default_factory=lambda: str(uuid.uuid4()))
     user_id: str = ""
-    started_at: datetime = field(default_factory=datetime.utcnow)
+    started_at: datetime = field(default_factory=lambda: datetime.now(UTC))
     ended_at: datetime | None = None
-    last_activity: datetime = field(default_factory=datetime.utcnow)
+    last_activity: datetime = field(default_factory=lambda: datetime.now(UTC))
     request_source: str = "cli"  # "cli" or "api"
     total_cost: float = 0.0
     cost_limit: float = 1.0

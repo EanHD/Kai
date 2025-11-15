@@ -2,7 +2,7 @@
 
 import uuid
 from dataclasses import dataclass, field
-from datetime import datetime
+from datetime import UTC, datetime
 from typing import Any
 
 
@@ -13,7 +13,7 @@ class Citation:
     title: str
     url: str
     snippet: str
-    accessed_at: datetime = field(default_factory=datetime.utcnow)
+    accessed_at: datetime = field(default_factory=lambda: datetime.now(UTC))
 
 
 @dataclass
@@ -42,7 +42,7 @@ class Response:
 
     response_id: str = field(default_factory=lambda: str(uuid.uuid4()))
     query_id: str = ""
-    timestamp: datetime = field(default_factory=datetime.utcnow)
+    timestamp: datetime = field(default_factory=lambda: datetime.now(UTC))
     mode: str = "concise"  # concise, expert, advisor
     content: str = ""
     source_citations: list[Citation] = field(default_factory=list)
