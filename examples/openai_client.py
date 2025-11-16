@@ -21,7 +21,7 @@ def example_chat_completion():
     """Non-streaming chat completion."""
     print("Example 1: Non-streaming chat completion")
     print("-" * 60)
-    
+
     response = client.chat.completions.create(
         model="granite-local",  # Uses local Ollama
         messages=[
@@ -31,7 +31,7 @@ def example_chat_completion():
         temperature=0.7,
         max_tokens=100,
     )
-    
+
     print(f"Response: {response.choices[0].message.content}")
     print(f"Tokens: {response.usage.total_tokens}")
     print()
@@ -41,7 +41,7 @@ def example_streaming():
     """Streaming chat completion."""
     print("Example 2: Streaming chat completion")
     print("-" * 60)
-    
+
     stream = client.chat.completions.create(
         model="granite-local",
         messages=[
@@ -49,7 +49,7 @@ def example_streaming():
         ],
         stream=True,
     )
-    
+
     print("Streaming response: ", end="", flush=True)
     for chunk in stream:
         if chunk.choices[0].delta.content:
@@ -61,9 +61,9 @@ def example_list_models():
     """List available models."""
     print("Example 3: List available models")
     print("-" * 60)
-    
+
     models = client.models.list()
-    
+
     print("Available models:")
     for model in models.data:
         print(f"  - {model.id}")
@@ -74,7 +74,7 @@ def example_with_tools():
     """Chat completion with function calling."""
     print("Example 4: Function calling")
     print("-" * 60)
-    
+
     tools = [
         {
             "type": "function",
@@ -94,7 +94,7 @@ def example_with_tools():
             },
         }
     ]
-    
+
     response = client.chat.completions.create(
         model="granite-local",
         messages=[
@@ -102,7 +102,7 @@ def example_with_tools():
         ],
         tools=tools,
     )
-    
+
     print(f"Response: {response.choices[0].message}")
     print()
 
@@ -111,7 +111,7 @@ if __name__ == "__main__":
     print("Kai OpenAI-Compatible API - Example Client")
     print("=" * 60)
     print()
-    
+
     example_chat_completion()
     example_streaming()
     example_list_models()

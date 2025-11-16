@@ -57,7 +57,7 @@ models:
     cost_per_1k_output: 0.075
     routing_priority: 3  # EXPENSIVE - only for critical accuracy
     is_local: false
-    active: true  # Used for planning/JSON only, NOT for user-facing text
+    active: true  # DISABLED FOR TESTING LOCAL-ONLY MODE
 
   # External Model (OpenRouter) - Balanced Performance/Cost
   # Best for: Moderate complexity, good reasoning at lower cost
@@ -73,7 +73,7 @@ models:
     cost_per_1k_output: 0.015
     routing_priority: 5  # BALANCED - good reasoning at reasonable cost
     is_local: false
-    active: true  # Used for planning/JSON only, NOT for user-facing text
+    active: true  # DISABLED FOR TESTING LOCAL-ONLY MODE
 
   # External Model (OpenRouter) - Super Cheap & Fast with Huge Context
   # Best for: High-volume queries, cost-sensitive workloads, long context tasks
@@ -89,4 +89,4 @@ models:
     cost_per_1k_output: 0.0005  # $0.50 per million = $0.0005 per 1k
     routing_priority: 8  # ULTRA-CHEAP - 15x cheaper than Sonnet, 150x cheaper than Opus!
     is_local: false
-    active: true  # Used for planning/JSON only, NOT for user-facing text
+    active: true  # DISABLED FOR TESTING LOCAL-ONLY MODE

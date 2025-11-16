@@ -151,8 +151,7 @@ class QueryAnalyzer:
         r"\d+\s*ah",  # amp-hours
         r"\d+\s*mah",  # milliamp-hours
         r"\d+\s*v\b",  # volts
-        r"\d+s\d+p",  # battery pack configuration (14S5P)
-        r"\d+s\s*\d+p",  # battery pack with space (14S 5P)
+        r"(\d+)\s*[sS]\s*(\d+)\s*[pP]",  # battery pack configuration (14S5P, 14s5p, 14S 5P)
         r"how many.*hours",
         r"what.*range",
         r"total.*capacity",
@@ -176,7 +175,7 @@ class QueryAnalyzer:
         "store",
         "keep track",
     ]
-    
+
     # Patterns for storing new information (user telling Kai something to remember)
     MEMORY_STORE_PATTERNS = [
         r"\bremember\s+(that\s+)?my",
@@ -187,7 +186,7 @@ class QueryAnalyzer:
         r"\bdon't\s+forget",
         r"\bmy\s+\w+\s+is\b",  # "my name is", "my favorite is"
     ]
-    
+
     # Patterns for retrieving stored information
     MEMORY_RETRIEVE_PATTERNS = [
         r"\bwhat\s+(is|was)\s+my",
@@ -291,7 +290,7 @@ class QueryAnalyzer:
             )
 
             is_shift = similarity < similarity_threshold
-            
+
             # Classify the type of topic shift
             shift_type = None
             if is_shift:
@@ -389,9 +388,11 @@ class QueryAnalyzer:
 
         # Detect multi-hop reasoning
         requires_multi_hop = self._requires_multi_hop_reasoning(text_lower)
-        
+
         # Detect memory operation type (store vs retrieve)
-        memory_operation = self._detect_memory_operation(text_lower) if "rag" in capabilities else None
+        memory_operation = (
+            self._detect_memory_operation(text_lower) if "rag" in capabilities else None
+        )
 
         # Determine routing
         routing = self._determine_routing(complexity, capabilities, complexity_score)
@@ -429,7 +430,7 @@ class QueryAnalyzer:
         if any(re.search(pattern, text) for pattern in self.DATE_TIME_PATTERNS):
             logger.debug("Date/time query detected - will use code_exec, not web_search")
             return False
-        
+
         # Explicit web search requests
         if any(keyword in text for keyword in self.WEB_SEARCH_KEYWORDS):
             return True
@@ -480,7 +481,7 @@ class QueryAnalyzer:
         if any(re.search(pattern, text) for pattern in self.DATE_TIME_PATTERNS):
             logger.debug("Date/time query detected - will use code_exec")
             return True
-        
+
         # Explicit keywords
         if any(keyword in text for keyword in self.CODE_EXEC_KEYWORDS):
             return True
@@ -507,13 +508,13 @@ class QueryAnalyzer:
             True if memory retrieval needed
         """
         return any(keyword in text for keyword in self.MEMORY_KEYWORDS)
-    
+
     def _detect_memory_operation(self, text: str) -> str | None:
         """Detect if this is a memory store or retrieve operation.
-        
+
         Args:
             text: Lowercase query text
-            
+
         Returns:
             "store" if user wants to save info, "retrieve" if asking for saved info, None otherwise
         """
@@ -521,19 +522,19 @@ class QueryAnalyzer:
         for pattern in self.MEMORY_STORE_PATTERNS:
             if re.search(pattern, text):
                 return "store"
-        
+
         # Check for retrieve patterns
         for pattern in self.MEMORY_RETRIEVE_PATTERNS:
             if re.search(pattern, text):
                 return "retrieve"
-        
+
         # Default heuristic: if has "my" it's probably storing, if asking question it's retrieving
         if re.search(r"\bmy\s+\w+\s+(is|are)", text):
             return "store"
-        
+
         if re.search(r"\b(what|which|who)\b.*\bmy\b", text):
             return "retrieve"
-            
+
         return None
 
     def _determine_complexity(self, text: str, capabilities: list[str]) -> str:

@@ -49,9 +49,7 @@ def check_docker():
     import subprocess
 
     try:
-        result = subprocess.run(
-            ["docker", "ps"], capture_output=True, text=True, timeout=5
-        )
+        result = subprocess.run(["docker", "ps"], capture_output=True, text=True, timeout=5)
         if result.returncode == 0:
             return True, "Docker running"
         return False, f"Docker not running: {result.stderr}"

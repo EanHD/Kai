@@ -8,7 +8,7 @@ import logging
 from typing import Any
 
 from src.core.llm_connector import LLMConnector, Message
-from src.core.plan_types import FinalizationInput, FinalizationOutput
+from src.core.plan_types import FinalizationOutput
 
 logger = logging.getLogger(__name__)
 
@@ -90,7 +90,7 @@ class GranitePresenter:
             "citations": citation_map,
             "conversation_history": conversation_history or [],
         }
-        
+
         # Call Granite presenter
         messages = [
             Message(role="system", content=PRESENTER_SYSTEM_PROMPT),
@@ -247,25 +247,27 @@ class GranitePresenter:
             if search_result.get("status") == "success":
                 data = search_result.get("data", {})
                 search_citations = data.get("citations", [])
-                
+
                 if search_citations:
                     # Build answer from search results
                     answer_parts.append(f"Based on my search for '{query}':")
-                    
+
                     # Add top 3 results
                     for i, citation in enumerate(search_citations[:3], 1):
                         title = citation.get("title", "")
                         snippet = citation.get("snippet", "")
                         url = citation.get("url", "")
-                        
+
                         if snippet:
                             answer_parts.append(f"\n[{i}] {snippet}")
-                            citations.append({
-                                "id": i,
-                                "label": title,
-                                "url": url,
-                            })
-                    
+                            citations.append(
+                                {
+                                    "id": i,
+                                    "label": title,
+                                    "url": url,
+                                }
+                            )
+
                     # Add sources
                     if citations:
                         answer_parts.append("\n\nSources:")

@@ -197,7 +197,7 @@ class CodeExecWrapper(BaseTool):
 
     def _task_get_current_datetime(self, variables: dict[str, Any]) -> str:
         """Generate code to get current date and time.
-        
+
         No variables required.
         """
         return """

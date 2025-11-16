@@ -19,11 +19,11 @@ models:
   # Fast external model for quick verification
   grok-fast:
     provider: openrouter
-    model_name: x-ai/grok-2-1212
+    model_name: x-ai/grok-4-fast
     api_key_env: OPENROUTER_API_KEY
     priority: 8
-    cost_per_1k_input: 0.002
-    cost_per_1k_output: 0.010
+    cost_per_1k_input: 0.0002
+    cost_per_1k_output: 0.0005
     max_tokens: 4000
     
   # Strong model for complex reasoning

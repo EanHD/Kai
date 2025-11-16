@@ -15,12 +15,11 @@ tools:
   # Fallback: Ollama native search → DuckDuckGo → cached results
   web_search:
     enabled: true
-    provider: duckduckgo  # Primary provider
-    config:
-      max_results: 5            # Number of search results to retrieve
-      timeout_seconds: 10       # Request timeout
-      fallback_on_rate_limit: true  # Auto-fallback if rate limited
-      cache_duration_hours: 24  # Cache results for faster retrieval
+    provider: duckduckgo  # Primary: duckduckgo, optional: brave (requires API key)
+    offline_mode: false  # Set to true to disable network calls
+    max_results: 10
+    timeout_seconds: 15
+    max_days_old: 30
 
   # RAG Memory Store Tool
   # Stores and retrieves personal information with encryption

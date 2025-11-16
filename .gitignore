@@ -75,8 +75,10 @@ lancedb/
 # Model caches
 .cache/
 
-# User memory data (keep structure, ignore user data)
-data/memory/*/
+# User data (entire data directory except structure files)
+data/*
+!data/.gitkeep
+!data/README.md
 
 # Speckit development artifacts (hidden, not deleted)
 .specify/
@@ -89,3 +91,10 @@ specs/*/checklists/
 specs/*/contracts/
 specs/*/STATUS.md
 specs/*/IMPLEMENTATION_SUMMARY.md
+playground/
+
+# Test artifacts
+*.skip
+.pytest_cache/
+htmlcov/
+.coverage

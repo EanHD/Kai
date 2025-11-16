@@ -164,9 +164,12 @@ async def test_logging(orchestrator, mock_conversation, caplog):
 
     await orchestrator.process_query("test query", mock_conversation)
 
-    # Check for key log messages
+    # Check for key log messages (emoji-based structured logging)
     log_text = caplog.text
-    assert "Processing query" in log_text
-    assert "Plan:" in log_text
-    assert "Executed:" in log_text
-    assert "Complete:" in log_text
+    # New format uses emojis: 🔍 QUERY START, ✨ SIMPLE QUERY FAST PATH, ✅ FAST PATH COMPLETE
+    assert "QUERY START" in log_text or "FAST PATH" in log_text, (
+        f"Should log query start or fast path, got: {log_text}"
+    )
+    assert "COMPLETE" in log_text or "Executed" in log_text, (
+        f"Should log completion, got: {log_text}"
+    )

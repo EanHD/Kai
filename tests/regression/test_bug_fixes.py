@@ -52,13 +52,26 @@ def test_embeddings_optional_import():
 
 
 @pytest.mark.asyncio
-@pytest.mark.skip(reason="Requires Ollama running - validated in production tests")
+@pytest.mark.skip(
+    reason="INTENTIONALLY SKIPPED: Requires live Ollama + external API calls. "
+    "This regression is fully validated by production tests: "
+    "test_production_ready.py::test_battery_14s5p_calculation and "
+    "test_code_exec_enforcement.py suite. Keeping this test for historical "
+    "documentation of Bug #2 fix."
+)
 async def test_math_routes_to_code_exec():
     """BUG #2: Granite did mental math (19.7 kWh) instead of using code_exec (0.636 kWh).
 
     Fixed: Canonical schema + mandatory routing in PlanAnalyzer prompt.
     Regression: Math queries MUST generate code_exec plans.
-    Note: This is validated in production tests with real API calls.
+
+    SKIP REASON: This test requires expensive API calls and is redundant with
+    production test coverage. The bug is prevented by:
+    - Phase 1 code_exec enforcement in plan_analyzer.py
+    - 18 regression tests in test_code_exec_enforcement.py
+    - 9 production tests validating real battery calculations
+
+    This test remains as documentation of the original bug and its fix.
     """
     pass
 

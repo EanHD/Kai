@@ -1,6 +1,7 @@
 """Main orchestrator for query routing and response generation."""
 
 import logging
+import os
 import time
 import uuid
 from typing import Any
@@ -49,7 +50,7 @@ class Orchestrator:
         # Core orchestration components
         # QueryAnalyzer for complexity detection (used for smart routing)
         self.query_analyzer = QueryAnalyzer()
-        
+
         # Use external model (Grok) for planning if available, fallback to local
         planner_connector = None
         for model_name, connector in self.external_connectors.items():
@@ -57,12 +58,12 @@ class Orchestrator:
                 planner_connector = connector
                 logger.info(f"Using {model_name} for planning")
                 break
-        
+
         if not planner_connector:
             planner_connector = self.local_connector
             logger.info("Using local model for planning (no external planner available)")
-        
-        self.plan_analyzer = PlanAnalyzer(planner_connector)
+
+        self.plan_analyzer = PlanAnalyzer(planner_connector, orchestrator=self)
         self.sanity_checker = SanityChecker()
 
         # Auto-detect specialist connectors
@@ -91,6 +92,11 @@ class Orchestrator:
         # Local model handles natural language presentation
         logger.info("Using local model for presentation")
         self.presenter = GranitePresenter(self.local_connector)
+
+        # Determine offline mode from env var or config
+        self._offline_mode = self._determine_offline_mode()
+        if self._offline_mode:
+            logger.warning("🔌 OFFLINE MODE ACTIVE | Web search disabled")
 
     async def process_query(
         self,
@@ -127,38 +133,38 @@ class Orchestrator:
             quick_analysis = self.query_analyzer.analyze(query_text)
             complexity_score = quick_analysis.get("complexity_score", 0.5)
             capabilities = quick_analysis.get("capabilities", [])
-            
+
             # Simple query fast path: no tools needed AND low complexity
             if not capabilities and complexity_score < 0.3:
                 logger.info(f"✨ SIMPLE QUERY FAST PATH | complexity={complexity_score:.2f}")
-                
+
                 # Build conversation context for local model
                 messages = []
                 if self.conversation_service:
                     try:
                         history = self.conversation_service.get_messages(
                             conversation.session_id,
-                            limit=5  # Last 5 for context
+                            limit=5,  # Last 5 for context
                         )
                         for msg in history:
                             role = "user" if msg.get("role") == "user" else "assistant"
                             messages.append(Message(role=role, content=msg.get("content", "")))
                     except Exception as e:
                         logger.warning(f"Failed to get history for fast path: {e}")
-                
+
                 # Add current query
                 messages.append(Message(role="user", content=query_text))
-                
+
                 # Call local model directly (no planning, no external models)
                 response = await self.local_connector.generate(
                     messages=messages,
                     temperature=0.7,
                     max_tokens=512,
                 )
-                
+
                 elapsed = time.time() - start_time
                 logger.info(f"✅ FAST PATH COMPLETE | time={elapsed:.2f}s")
-                
+
                 return Response(
                     query_id=str(uuid.uuid4()),
                     mode="concise",
@@ -166,32 +172,36 @@ class Orchestrator:
                     token_count=response.token_count,
                     cost=response.cost,
                 )
-            
+
             # Complex query: use full plan-execute-present pipeline
             logger.info(
                 f"🎯 COMPLEX QUERY PATH | complexity={complexity_score:.2f} | "
                 f"capabilities={capabilities}"
             )
-            
+
             # Retrieve conversation history for context
             conversation_context = []
             if self.conversation_service:
                 try:
                     messages = self.conversation_service.get_messages(
                         conversation.session_id,
-                        limit=3  # Last 3 messages for plan context
+                        limit=3,  # Last 3 messages for plan context
                     )
                     conversation_context = messages
                     if conversation_context:
-                        logger.info(f"Retrieved {len(conversation_context)} messages for plan context")
+                        logger.info(
+                            f"Retrieved {len(conversation_context)} messages for plan context"
+                        )
                 except Exception as e:
                     logger.warning(f"Failed to get context for planning: {e}")
-            
+
             # Step 1: Analyze → Plan
             plan = await self.plan_analyzer.analyze(
-                query_text, 
+                query_text,
                 source=source,
-                context={"conversation_history": conversation_context} if conversation_context else None
+                context={"conversation_history": conversation_context}
+                if conversation_context
+                else None,
             )
 
             logger.info(
@@ -216,10 +226,14 @@ class Orchestrator:
 
             # Defensive: ensure results are dicts
             if not isinstance(tool_results, dict):
-                logger.warning(f"tool_results is not a dict: {type(tool_results)}, using empty dict")
+                logger.warning(
+                    f"tool_results is not a dict: {type(tool_results)}, using empty dict"
+                )
                 tool_results = {}
             if not isinstance(specialist_results, dict):
-                logger.warning(f"specialist_results is not a dict: {type(specialist_results)}, using empty dict")
+                logger.warning(
+                    f"specialist_results is not a dict: {type(specialist_results)}, using empty dict"
+                )
                 specialist_results = {}
 
             # tool_results and specialist_results are dicts, not lists
@@ -252,32 +266,35 @@ class Orchestrator:
                 try:
                     # Get last 10 messages for context (5 exchanges)
                     messages = self.conversation_service.get_messages(
-                        conversation.session_id,
-                        limit=10
+                        conversation.session_id, limit=10
                     )
                     # Format: [{role, content, timestamp}, ...]
                     conversation_history = messages
-                    
+
                     # If we have more than 10 messages total, summarize older ones
                     if len(messages) >= 10:
                         # Get total message count
                         all_messages = self.conversation_service.get_messages(
-                            conversation.session_id,
-                            limit=None
+                            conversation.session_id, limit=None
                         )
-                        
+
                         # If we have significantly more messages, add a summary
                         if len(all_messages) > 15:
                             summary = self._summarize_old_messages(all_messages[10:])
                             if summary:
                                 # Prepend summary as a system message
-                                conversation_history.insert(0, {
-                                    "role": "system",
-                                    "content": f"Earlier conversation summary: {summary}",
-                                    "timestamp": all_messages[10].get("timestamp", "")
-                                })
-                    
-                    logger.debug(f"Retrieved {len(conversation_history)} messages from conversation history")
+                                conversation_history.insert(
+                                    0,
+                                    {
+                                        "role": "system",
+                                        "content": f"Earlier conversation summary: {summary}",
+                                        "timestamp": all_messages[10].get("timestamp", ""),
+                                    },
+                                )
+
+                    logger.debug(
+                        f"Retrieved {len(conversation_history)} messages from conversation history"
+                    )
                 except Exception as e:
                     logger.warning(f"Failed to retrieve conversation history: {e}")
 
@@ -333,19 +350,19 @@ class Orchestrator:
                 token_count=0,
                 cost=0.0,
             )
-    
+
     def _summarize_old_messages(self, old_messages: list[dict[str, Any]]) -> str | None:
         """Create a brief summary of older conversation messages.
-        
+
         Args:
             old_messages: List of old messages to summarize
-            
+
         Returns:
             Brief summary string or None
         """
         if not old_messages:
             return None
-        
+
         # Simple extractive summary - get key topics
         topics = []
         for msg in old_messages:
@@ -355,10 +372,10 @@ class Orchestrator:
                 # Look for user statements about themselves
                 if "my" in content.lower():
                     topics.append(content[:100])  # First 100 chars
-        
+
         if topics:
             return " | ".join(topics[:3])  # Max 3 topics
-        
+
         return f"{len(old_messages)} earlier messages about various topics"
 
     async def check_health(self) -> dict[str, bool]:
@@ -395,3 +412,36 @@ class Orchestrator:
             Dict with cost statistics
         """
         return self.cost_tracker.get_cost_summary(session_id)
+
+    def _determine_offline_mode(self) -> bool:
+        """Determine if offline mode is active.
+
+        Checks (in order of priority):
+        1. KAI_OFFLINE_MODE environment variable
+        2. offline_mode setting in tools config
+
+        Returns:
+            True if offline mode is active, False otherwise
+        """
+        # Environment variable takes precedence
+        env_offline = os.getenv("KAI_OFFLINE_MODE", "").lower()
+        if env_offline in ("true", "1", "yes"):
+            return True
+        if env_offline in ("false", "0", "no"):
+            return False
+
+        # Fall back to config file
+        if "web_search" in self.tools:
+            web_search_tool = self.tools["web_search"]
+            if hasattr(web_search_tool, "config"):
+                return web_search_tool.config.get("offline_mode", False)
+
+        return False
+
+    def is_offline_mode(self) -> bool:
+        """Check if orchestrator is in offline mode.
+
+        Returns:
+            True if offline mode is active, False otherwise
+        """
+        return self._offline_mode

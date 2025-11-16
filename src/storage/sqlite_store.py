@@ -309,30 +309,27 @@ class SQLiteStore:
                 query += f" LIMIT {limit}"
             cursor.execute(query, (session_id,))
             return [dict(row) for row in cursor.fetchall()]
-    
+
     def get_old_conversations(self, cutoff_date: str) -> list[dict[str, Any]]:
         """Get conversations older than cutoff date.
-        
+
         Args:
             cutoff_date: ISO format date string
-            
+
         Returns:
             List of conversation dicts
         """
         with self._get_connection() as conn:
             cursor = conn.cursor()
-            cursor.execute(
-                "SELECT * FROM conversations WHERE started_at < ?",
-                (cutoff_date,)
-            )
+            cursor.execute("SELECT * FROM conversations WHERE started_at < ?", (cutoff_date,))
             return [dict(row) for row in cursor.fetchall()]
-    
+
     def delete_messages(self, session_id: str) -> int:
         """Delete all messages for a session.
-        
+
         Args:
             session_id: Session to delete messages from
-            
+
         Returns:
             Number of messages deleted
         """
@@ -341,10 +338,10 @@ class SQLiteStore:
             cursor.execute("DELETE FROM messages WHERE session_id = ?", (session_id,))
             conn.commit()
             return cursor.rowcount
-    
+
     def delete_conversation(self, session_id: str) -> None:
         """Delete a conversation session.
-        
+
         Args:
             session_id: Session to delete
         """

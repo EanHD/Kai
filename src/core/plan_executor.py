@@ -308,6 +308,8 @@ class PlanExecutor:
             "multiply",
             "divide",
             "total",
+            "battery pack",
+            "cells",
         ]
 
         query_lower = plan.user_query.lower()
@@ -318,14 +320,13 @@ class PlanExecutor:
             step.type == StepType.TOOL_CALL and step.tool == "code_exec" for step in plan.steps
         )
 
-        # If query looks like math but plan has no code_exec, that's suspicious
+        # ENFORCEMENT: If query looks like math but plan has no code_exec, inject it
         if has_math_indicators and not has_code_exec:
             logger.warning(
-                f"Plan for math query '{plan.user_query[:50]}...' has no code_exec step. "
-                "This may result in incorrect mental math."
+                f"⚠️  MATH QUERY WITHOUT CODE_EXEC | query='{plan.user_query[:60]}...' | "
+                "Injecting code_exec to prevent mental math hallucination"
             )
-            # Don't fail the plan, just log warning
-            # In the future, we could inject a code_exec step here
+            self._inject_code_exec_step(plan, query_lower)
 
         # Check code_exec steps have valid input schema
         for step in plan.steps:
@@ -350,6 +351,67 @@ class PlanExecutor:
                     return f"Step '{step.id}': code_exec mode='raw_code' requires 'code' field"
 
         return None
+
+    def _inject_code_exec_step(self, plan: Plan, query_lower: str) -> None:
+        """Inject code_exec step into plan to prevent mental math.
+
+        Args:
+            plan: Plan to modify
+            query_lower: Lowercase query text for pattern detection
+        """
+        # Detect battery pack pattern for specialized task
+        import re
+
+        battery_pattern = r"(\d+)\s*[sS]\s*(\d+)\s*[pP]"
+        is_battery = re.search(battery_pattern, query_lower)
+
+        # Create appropriate code_exec step
+        if is_battery:
+            # Use battery_pack_energy task
+            new_step = PlanStep(
+                id="injected_code_exec",
+                type=StepType.TOOL_CALL,
+                tool="code_exec",
+                input={
+                    "language": "python",
+                    "mode": "task",
+                    "task": "battery_pack_energy",
+                    "variables": {"query": plan.user_query},
+                },
+                depends_on=[],
+                required=True,
+                can_skip_if_unavailable=False,
+            )
+            logger.info("Injected battery_pack_energy code_exec step")
+        else:
+            # Use generic_math task
+            new_step = PlanStep(
+                id="injected_code_exec",
+                type=StepType.TOOL_CALL,
+                tool="code_exec",
+                input={
+                    "language": "python",
+                    "mode": "task",
+                    "task": "generic_math",
+                    "variables": {"query": plan.user_query},
+                },
+                depends_on=[],
+                required=True,
+                can_skip_if_unavailable=False,
+            )
+            logger.info("Injected generic_math code_exec step")
+
+        # Insert before finalization step
+        finalization_idx = None
+        for idx, step in enumerate(plan.steps):
+            if step.type == StepType.FINALIZATION:
+                finalization_idx = idx
+                break
+
+        if finalization_idx is not None:
+            plan.steps.insert(finalization_idx, new_step)
+        else:
+            plan.steps.append(new_step)
 
     def _topological_sort(self, steps: list[PlanStep]) -> list[PlanStep] | None:
         """Sort steps based on dependencies.

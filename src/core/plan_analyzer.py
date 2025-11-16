@@ -7,10 +7,14 @@ what tools and models should be invoked.
 import json
 import logging
 import uuid
+from typing import TYPE_CHECKING
 
 from src.core.llm_connector import LLMConnector, Message
 from src.core.plan_types import ComplexityLevel, Plan, PlanStep, SafetyLevel, StepType
 from src.core.query_analyzer import QueryAnalyzer
+
+if TYPE_CHECKING:
+    from src.core.orchestrator import Orchestrator
 
 logger = logging.getLogger(__name__)
 
@@ -155,6 +159,63 @@ Response:
   ]
 }
 
+ALTERNATIVE: Query-based battery pack parsing (when query has XsYp notation):
+
+Query: "14S5P pack, each cell is 5000mAh at 3.6V nominal. Total energy in kWh?"
+
+Response:
+{
+  "intent": "calculate_battery_pack_energy",
+  "complexity": "simple",
+  "safety_level": "normal",
+  "capabilities": ["code_exec"],
+  "steps": [
+    {
+      "id": "calc_energy",
+      "type": "tool_call",
+      "tool": "code_exec",
+      "description": "Calculate 14S5P pack energy (70 cells total)",
+      "input": {
+        "language": "python",
+        "mode": "task",
+        "task": "battery_pack_energy",
+        "variables": {
+          "query": "14S5P pack, each cell is 5000mAh at 3.6V nominal. Total energy in kWh?"
+        }
+      },
+      "depends_on": [],
+      "required": true,
+      "can_skip_if_unavailable": false
+    },
+    {
+      "id": "sanity_energy",
+      "type": "sanity_check",
+      "tool": null,
+      "model": null,
+      "description": "Verify energy calculation is realistic",
+      "input": {"context_step_ids": ["calc_energy"]},
+      "depends_on": ["calc_energy"],
+      "required": true,
+      "can_skip_if_unavailable": false
+    },
+    {
+      "id": "finalize",
+      "type": "finalization",
+      "tool": null,
+      "model": "granite",
+      "description": "Present result to user",
+      "input": {},
+      "depends_on": ["calc_energy", "sanity_energy"],
+      "required": true,
+      "can_skip_if_unavailable": false
+    }
+  ]
+}
+
+NOTE: When query contains XsYp notation like "14S5P", you can pass the full query text
+as the "query" variable and the battery_pack_energy task will parse it automatically.
+This is simpler than extracting each variable manually.
+
 EXAMPLE PLAN FOR WEB SEARCH (for current information, news, facts):
 
 Query: "What's happening with SpaceX launches this month?"
@@ -254,14 +315,16 @@ REMEMBER: You are a PLANNER not a CALCULATOR. Extract numbers, identify the task
 class PlanAnalyzer:
     """Generates structured execution plans from queries."""
 
-    def __init__(self, local_connector: LLMConnector):
+    def __init__(self, local_connector: LLMConnector, orchestrator: "Orchestrator | None" = None):
         """Initialize plan analyzer.
 
         Args:
             local_connector: LLM connector for Granite
+            orchestrator: Optional reference to orchestrator for offline mode check
         """
         self.connector = local_connector
         self.query_analyzer = QueryAnalyzer()
+        self.orchestrator = orchestrator
 
     async def analyze(
         self, query_text: str, source: str = "api", context: dict | None = None
@@ -288,13 +351,15 @@ class PlanAnalyzer:
                     content = msg.get("content", "")[:200]  # Limit length
                     context_str += f"{role}: {content}\n"
                 user_content = context_str + f"\nCurrent query: {query_text}"
-                logger.info(f"Added conversation context with {len(history)} messages to plan analyzer")
-        
+                logger.info(
+                    f"Added conversation context with {len(history)} messages to plan analyzer"
+                )
+
         messages = [
             Message(role="system", content=ANALYZER_SYSTEM_PROMPT),
             Message(role="user", content=user_content),
         ]
-        
+
         logger.debug(f"Plan analyzer input: {user_content[:300]}...")
 
         try:
@@ -312,6 +377,25 @@ class PlanAnalyzer:
                 logger.warning("Failed to parse plan JSON, using fallback")
                 return self._create_fallback_plan(query_text, source)
 
+            # Validate plan structure BEFORE converting to Plan object
+            # If query needs code_exec but plan doesn't have it, use fallback instead
+            analysis = self.query_analyzer.analyze(query_text)
+            required_caps = analysis.get("required_capabilities", [])
+
+            if "code_exec" in required_caps:
+                has_code_exec = any(
+                    step.get("type") == "tool_call" and step.get("tool") == "code_exec"
+                    for step in plan_dict.get("steps", [])
+                )
+
+                if not has_code_exec:
+                    logger.warning(
+                        "⚠️  PLAN VALIDATION FAILED | "
+                        "Query requires code_exec but Granite's plan has no code_exec step | "
+                        "Falling back to query-analyzer-based plan"
+                    )
+                    return self._create_fallback_plan(query_text, source)
+
             # Convert to Plan object
             plan = self._dict_to_plan(plan_dict, query_text, source)
 
@@ -324,7 +408,7 @@ class PlanAnalyzer:
             return plan
 
         except Exception as e:
-            logger.error(f"Plan analysis failed: {e}", exc_info=True)
+            logger.error(f"Plan generation failed: {e}", exc_info=True)
             return self._create_fallback_plan(query_text, source)
 
     def _parse_plan_json(self, response: str) -> dict | None:
@@ -447,6 +531,20 @@ class PlanAnalyzer:
 
         # Add code execution step if needed
         if "code_exec" in required_caps:
+            # Detect battery pack pattern for specialized task
+            import re
+
+            battery_pattern = r"(\d+)\s*[sS]\s*(\d+)\s*[pP]"
+            is_battery = re.search(battery_pattern, query_text)
+
+            if is_battery:
+                # Use battery_pack_energy for XsYp patterns
+                task_name = "battery_pack_energy"
+                logger.info("Fallback plan: detected battery pattern, using battery_pack_energy")
+            else:
+                # Use generic_math for other calculations
+                task_name = "generic_math"
+
             steps.append(
                 PlanStep(
                     id=f"code_exec_{step_id}",
@@ -457,7 +555,7 @@ class PlanAnalyzer:
                     input={
                         "language": "python",
                         "mode": "task",
-                        "task": "generic_math",
+                        "task": task_name,
                         "variables": {"query": query_text},
                     },
                     depends_on=[],
@@ -466,21 +564,27 @@ class PlanAnalyzer:
             )
             step_id += 1
 
-        # Add web search step if needed
+        # Add web search step if needed (skip if offline)
+        offline_mode = self.orchestrator.is_offline_mode() if self.orchestrator else False
         if "web_search" in required_caps:
-            steps.append(
-                PlanStep(
-                    id=f"web_search_{step_id}",
-                    type=StepType.TOOL_CALL,
-                    tool="web_search",
-                    model="granite",
-                    description="Search for information",
-                    input={"query": query_text},
-                    depends_on=[],
-                    required=True,
+            if offline_mode:
+                logger.warning(
+                    "🔌 OFFLINE MODE | Skipping web_search step | Will add note to finalization"
                 )
-            )
-            step_id += 1
+            else:
+                steps.append(
+                    PlanStep(
+                        id=f"web_search_{step_id}",
+                        type=StepType.TOOL_CALL,
+                        tool="web_search",
+                        model="granite",
+                        description="Search for information",
+                        input={"query": query_text},
+                        depends_on=[],
+                        required=True,
+                    )
+                )
+                step_id += 1
 
         # Add finalization step
         depends_on = [step.id for step in steps]

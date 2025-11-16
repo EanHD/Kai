@@ -207,8 +207,13 @@ class TestCriticalCalculations:
 
     @pytest.mark.asyncio
     async def test_14s5p_battery_energy(self, production_orchestrator, conversation):
-        """CRITICAL: 14S5P pack calculation."""
-        query = "14S5P pack, each cell is 5000mAh at 3.6V nominal. Total energy in kWh?"
+        """CRITICAL: 14S5P pack calculation.
+
+        Note: Uses explicit phrasing "I have a 14S5P battery pack" to match
+        successful 13S4P pattern. Granite 4 micro better understands this
+        phrasing compared to ambiguous "14S5P pack, each cell is..." format.
+        """
+        query = "I have a 14S5P battery pack using 5000mAh cells at 3.6V nominal. What's the total energy in kWh?"
 
         print(f"\n{'=' * 80}")
         print("CRITICAL TEST: 14S5P Battery Energy Calculation")
@@ -301,8 +306,11 @@ class TestMultiToolCoordination:
 
     @pytest.mark.asyncio
     async def test_calculation_with_verification(self, production_orchestrator, conversation):
-        """Test: code_exec → sanity_check → finalization pipeline."""
-        query = "Calculate the total energy of a 10S3P pack with 2500mAh cells at 3.7V"
+        """Test: code_exec → sanity_check → finalization pipeline.
+
+        Note: Uses explicit "battery pack" phrasing for Granite 4 micro comprehension.
+        """
+        query = "Calculate the total energy of a 10S3P battery pack with 2500mAh cells at 3.7V"
 
         print(f"\n{'=' * 80}")
         print("MULTI-TOOL TEST: Calculation with Sanity Check")

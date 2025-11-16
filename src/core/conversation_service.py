@@ -123,49 +123,49 @@ class ConversationService:
             List of message dicts
         """
         return self.storage.get_messages(session_id, limit)
-    
+
     def prune_old_conversations(self, days_old: int = 30) -> dict[str, int]:
         """Prune conversations older than specified days.
-        
+
         Args:
             days_old: Delete conversations older than this many days
-            
+
         Returns:
             Dict with counts of deleted conversations and messages
         """
         from datetime import datetime, timedelta
-        
+
         cutoff_date = datetime.now() - timedelta(days=days_old)
-        
+
         try:
             # Get old conversations
             old_sessions = self.storage.get_old_conversations(cutoff_date.isoformat())
-            
+
             deleted_conversations = 0
             deleted_messages = 0
-            
+
             for session in old_sessions:
                 session_id = session.get("session_id")
-                
+
                 # Delete messages first
                 msg_count = self.storage.delete_messages(session_id)
                 deleted_messages += msg_count
-                
+
                 # Delete conversation
                 self.storage.delete_conversation(session_id)
                 deleted_conversations += 1
-            
+
             logger.info(
                 f"Pruned {deleted_conversations} conversations ({deleted_messages} messages) "
                 f"older than {days_old} days"
             )
-            
+
             return {
                 "conversations_deleted": deleted_conversations,
                 "messages_deleted": deleted_messages,
                 "cutoff_date": cutoff_date.isoformat(),
             }
-            
+
         except Exception as e:
             logger.error(f"Failed to prune old conversations: {e}")
             return {

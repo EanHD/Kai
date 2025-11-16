@@ -49,7 +49,7 @@ class ChatCompletionRequest(BaseModel):
 
     # Required
     model: str
-    messages: list[Message]
+    messages: list[Message] = Field(..., min_length=1)
 
     # Optional parameters
     temperature: float | None = Field(default=1.0, ge=0.0, le=2.0)

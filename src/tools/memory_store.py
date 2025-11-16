@@ -78,7 +78,6 @@ class MemoryStoreTool(BaseTool):
 
         try:
             action = parameters.get("action", "store")
-            user_id = parameters.get("user_id", "default_user")
 
             if action == "store":
                 result = await self._store_memory(parameters)
@@ -199,7 +198,7 @@ class MemoryStoreTool(BaseTool):
             Dict with deletion status
         """
         memory_id = parameters.get("memory_id", "")
-        
+
         if not memory_id:
             raise ValueError("memory_id is required for deletion")
 

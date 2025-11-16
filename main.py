@@ -2,14 +2,14 @@
 FastAPI OpenAI-Compatible API Server
 
 Provides OpenAI-compatible endpoints for chat completions, model listing,
-and health checks. Routes requests to the existing orchestrator with 
+and health checks. Routes requests to the existing orchestrator with
 intelligent model selection.
 """
 
 import asyncio
 import logging
 from contextlib import asynccontextmanager
-from fastapi import FastAPI, Request
+from fastapi import FastAPI, Request, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 
@@ -33,24 +33,24 @@ async def lifespan(app: FastAPI):
     """Handle application startup and shutdown."""
     # Startup
     logger.info("Starting FastAPI OpenAI-compatible API server")
-    
+
     server_config = app.state.config.get("server", {})
     logger.info(f"Server configured for port {server_config.get('port', 9000)}")
-    
+
     # Initialize services
     logger.info("Initializing storage and orchestrator...")
-    
+
     # Initialize SQLite storage
     storage = SQLiteStore(db_path="data/kai.db")
     app.state.storage = storage
-    
+
     # Load Kai configuration for LLM settings
     kai_config = ConfigLoader()
-    
+
     # Initialize LLM connectors
     local_connector = None
     external_connectors = {}
-    
+
     active_models = kai_config.get_active_models()
     for model_config in active_models:
         config_dict = {
@@ -62,22 +62,22 @@ async def lifespan(app: FastAPI):
             "cost_per_1k_input": model_config.cost_per_1k_input,
             "cost_per_1k_output": model_config.cost_per_1k_output,
         }
-        
+
         if model_config.provider == "ollama":
             ollama_url = kai_config.get_env("ollama_base_url")
             local_connector = OllamaProvider(config_dict, ollama_url)
             logger.info(f"Initialized Ollama: {model_config.model_name}")
-        
+
         elif model_config.provider == "openrouter":
             api_key = kai_config.get_env("openrouter_api_key")
             if api_key:
                 connector = OpenRouterProvider(config_dict, api_key)
                 external_connectors[model_config.model_id] = connector
                 logger.info(f"Initialized OpenRouter: {model_config.model_name}")
-    
+
     if not local_connector:
         logger.error("No local connector initialized - API will not function properly")
-    
+
     # Initialize orchestrator
     orchestrator = Orchestrator(
         local_connector=local_connector,
@@ -86,15 +86,16 @@ async def lifespan(app: FastAPI):
         cost_limit=100.0,  # High limit for API usage
         soft_cap_threshold=0.8,
     )
-    
+
     # Inject conversation service for memory (create simple conversation service for API)
     from src.core.conversation_service import ConversationService
+
     conversation_service = ConversationService(storage)
     orchestrator.conversation_service = conversation_service
     app.state.conversation_service = conversation_service
-    
+
     app.state.orchestrator = orchestrator
-    
+
     # Initialize reflection agent for continuous learning (always-on)
     memory_vault = None
     reflection_agent = None
@@ -107,11 +108,11 @@ async def lifespan(app: FastAPI):
         logger.info("Reflection agent initialized - continuous learning enabled")
     else:
         logger.warning("No local connector - reflection disabled for API server")
-    
+
     logger.info("Orchestrator initialized successfully")
-    
+
     yield
-    
+
     # Shutdown
     logger.info("Shutting down API server")
     # Clean up resources if needed
@@ -150,6 +151,7 @@ if config.get("cors.enabled", True):
 
 # Add request logging middleware
 from src.api.middleware.request_logger import RequestLoggerMiddleware
+
 app.add_middleware(RequestLoggerMiddleware)
 logger.info("Request logging middleware enabled")
 
@@ -159,11 +161,11 @@ logger.info("Request logging middleware enabled")
 async def global_exception_handler(request: Request, exc: Exception):
     """Handle unexpected exceptions with OpenAI-compatible error format."""
     logger.error(f"Unhandled exception on {request.url.path}: {exc}", exc_info=True)
-    
+
     # Detect specific error types and provide helpful messages
     error_message = "Internal server error"
     error_code = "internal_error"
-    
+
     if "Ollama" in str(exc) or "ollama" in str(exc).lower():
         error_message = "AI model service (Ollama) unavailable. Please ensure Ollama is running."
         error_code = "model_unavailable"
@@ -173,7 +175,7 @@ async def global_exception_handler(request: Request, exc: Exception):
     elif "not found" in str(exc).lower():
         error_message = "Requested model not found. Check available models at /v1/models"
         error_code = "model_not_found"
-    
+
     return JSONResponse(
         status_code=500,
         content={
@@ -183,6 +185,35 @@ async def global_exception_handler(request: Request, exc: Exception):
                 "param": None,
                 "code": error_code,
                 "details": str(exc) if logger.level <= logging.DEBUG else None,
+            }
+        },
+    )
+
+
+# HTTPException handler - unwrap ErrorResponse from detail
+@app.exception_handler(HTTPException)
+async def http_exception_handler(request: Request, exc: HTTPException):
+    """Handle HTTPException and unwrap ErrorResponse from detail.
+
+    FastAPI wraps HTTPException.detail in {"detail": ...}, but OpenAI format
+    expects errors at the top level as {"error": {...}}.
+    """
+    # If detail is a dict with 'error' key (ErrorResponse), unwrap it
+    if isinstance(exc.detail, dict) and "error" in exc.detail:
+        return JSONResponse(
+            status_code=exc.status_code,
+            content=exc.detail,  # Already has {"error": {...}} structure
+        )
+
+    # Otherwise, wrap plain detail in error format
+    return JSONResponse(
+        status_code=exc.status_code,
+        content={
+            "error": {
+                "message": str(exc.detail),
+                "type": "api_error",
+                "param": None,
+                "code": None,
             }
         },
     )
@@ -215,7 +246,6 @@ from src.api.models.chat import ChatCompletionRequest
 from src.api.models.errors import invalid_request_error, server_error
 from src.api.adapter import OrchestratorAdapter
 from src.api.streaming import stream_openai_response
-from fastapi import HTTPException
 from fastapi.responses import StreamingResponse
 from sse_starlette.sse import EventSourceResponse
 
@@ -224,27 +254,27 @@ from sse_starlette.sse import EventSourceResponse
 @app.post("/v1/chat/completions")
 async def chat_completions(request: ChatCompletionRequest):
     """OpenAI-compatible chat completions endpoint.
-    
+
     Supports both streaming and non-streaming requests.
     """
     try:
         # Get orchestrator and reflection components from app state
         orchestrator = app.state.orchestrator
-        reflection_agent = getattr(app.state, 'reflection_agent', None)
-        memory_vault = getattr(app.state, 'memory_vault', None)
-        
+        reflection_agent = getattr(app.state, "reflection_agent", None)
+        memory_vault = getattr(app.state, "memory_vault", None)
+
         # Initialize orchestrator adapter with reflection support
         adapter = OrchestratorAdapter(
             orchestrator_client=orchestrator,
             reflection_agent=reflection_agent,
             memory_vault=memory_vault,
         )
-        
+
         # Handle streaming vs non-streaming
         if request.stream:
             # Return streaming response (already SSE formatted)
             sse_stream = process_chat_completion_stream(request, config, adapter)
-            
+
             return EventSourceResponse(
                 sse_stream,
                 media_type="text/event-stream",
@@ -252,43 +282,45 @@ async def chat_completions(request: ChatCompletionRequest):
         else:
             # Return complete response
             response = await process_chat_completion(request, config, adapter)
-            
+
             # Extract metadata for headers
             metadata = response.model_dump().get("_metadata", {})
-            
+
             # Create JSONResponse with custom headers
             from fastapi.responses import JSONResponse as FastAPIJSONResponse
+
             response_dict = response.model_dump(exclude={"_metadata"})
-            
+
             return FastAPIJSONResponse(
                 content=response_dict,
                 headers={
                     "X-Model-Used": metadata.get("model_used", ""),
                     "X-Cost": str(metadata.get("cost", 0.0)),
-                }
+                },
             )
-            
+
     except ValueError as e:
         # Model not found or invalid request
         logger.warning(f"Invalid request: {e}")
         error_response = invalid_request_error(str(e))
         raise HTTPException(status_code=400, detail=error_response.model_dump())
-        
+
     except RuntimeError as e:
         # Orchestrator error - provide helpful context
         error_msg = str(e)
         if "Ollama" in error_msg:
             error_msg = f"Ollama service error: {error_msg}. Ensure Ollama is running and the model is loaded."
-        
+
         logger.error(f"Runtime error: {error_msg}")
         error_response = server_error(error_msg)
         raise HTTPException(status_code=503, detail=error_response.model_dump())
-        
+
     except Exception as e:
         # Unexpected error
         logger.error(f"Unexpected error in chat completions: {e}", exc_info=True)
         error_response = server_error(
-            "An unexpected error occurred. Check logs for details." if logger.level > logging.DEBUG 
+            "An unexpected error occurred. Check logs for details."
+            if logger.level > logging.DEBUG
             else f"Error: {str(e)}"
         )
         raise HTTPException(status_code=500, detail=error_response.model_dump())
@@ -310,9 +342,9 @@ async def health():
 
 if __name__ == "__main__":
     import uvicorn
-    
+
     server_config = config.get("server", {})
-    
+
     uvicorn.run(
         "main:app",
         host=server_config.get("host", "0.0.0.0"),
