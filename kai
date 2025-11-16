@@ -1,7 +1,8 @@
 #!/bin/bash
 # Kai CLI entry point with dependency checks
 
-set -e  # Exit on any error
+# DON'T use set -e yet - we want to see errors
+# set -e
 
 # Get absolute path to script directory (project root)
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
@@ -35,8 +36,13 @@ if command -v pgrep &> /dev/null && ! pgrep -x "ollama" > /dev/null 2>&1; then
 fi
 
 echo "🚀 Launching Kai CLI..."
+echo "   Command: uv run --directory '$SCRIPT_DIR' python -m src.cli.main $@"
 echo ""
 
-# Run Kai with uv from project root
-# Use absolute path to ensure uv finds the right pyproject.toml
-exec uv run --directory "$SCRIPT_DIR" python -m src.cli.main "$@"
+# Run Kai with uv from project root - DON'T use exec so we can see errors
+uv run --directory "$SCRIPT_DIR" python -m src.cli.main "$@"
+exit_code=$?
+
+echo ""
+echo "Exit code: $exit_code"
+exit $exit_code
