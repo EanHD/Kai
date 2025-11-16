@@ -6,6 +6,13 @@ set -e  # Exit on any error
 # Get absolute path to script directory (project root)
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 
+echo "🔍 Debug Info:"
+echo "   Script dir: $SCRIPT_DIR"
+echo "   Current dir: $(pwd)"
+echo "   Python: $(command -v python || echo 'NOT FOUND')"
+echo "   uv: $(command -v uv || echo 'NOT FOUND')"
+echo ""
+
 # Change to project root
 cd "$SCRIPT_DIR"
 
@@ -26,6 +33,9 @@ if command -v pgrep &> /dev/null && ! pgrep -x "ollama" > /dev/null 2>&1; then
     echo "⚠ Warning: Ollama not running (required for local models)"
     echo "   Start with: ollama serve"
 fi
+
+echo "🚀 Launching Kai CLI..."
+echo ""
 
 # Run Kai with uv from project root
 # Use absolute path to ensure uv finds the right pyproject.toml
