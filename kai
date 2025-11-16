@@ -3,12 +3,10 @@
 
 set -e  # Exit on any error
 
-# Debug output (comment out after troubleshooting)
-# echo "DEBUG: Script starting from: $(pwd)"
-# echo "DEBUG: Script location: ${BASH_SOURCE[0]}"
-
-# Change to script's directory to ensure relative imports work
+# Get absolute path to script directory (project root)
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+
+# Change to project root
 cd "$SCRIPT_DIR"
 
 # Check if uv is available
@@ -19,15 +17,16 @@ if ! command -v uv &> /dev/null; then
     echo "  curl -LsSf https://astral.sh/uv/install.sh | sh"
     echo ""
     echo "Or use python directly from project root:"
-    echo "  cd $SCRIPT_DIR && python -m src.cli.main"
+    echo "  cd '$SCRIPT_DIR' && python -m src.cli.main"
     exit 1
 fi
 
-# Check Ollama is running
-if ! pgrep -x "ollama" > /dev/null 2>&1; then
+# Check Ollama is running (suppress errors if pgrep not found)
+if command -v pgrep &> /dev/null && ! pgrep -x "ollama" > /dev/null 2>&1; then
     echo "⚠ Warning: Ollama not running (required for local models)"
     echo "   Start with: ollama serve"
 fi
 
 # Run Kai with uv from project root
-exec uv run python -m src.cli.main "$@"
+# Use absolute path to ensure uv finds the right pyproject.toml
+exec uv run --directory "$SCRIPT_DIR" python -m src.cli.main "$@"
