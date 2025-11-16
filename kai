@@ -11,6 +11,12 @@ cd "$SCRIPT_DIR" || exit 1
 if [ -d ".venv" ]; then
     echo "🔍 Using existing virtual environment"
     source .venv/bin/activate
+    
+    # Check Python version and executable
+    echo "   Python: $(python --version 2>&1)"
+    echo "   Executable: $(python -c 'import sys; print(sys.executable)' 2>&1)"
+    echo ""
+    
     exec python -m src.cli.main "$@"
 fi
 
