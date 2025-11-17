@@ -103,7 +103,7 @@ class GranitePresenter:
             response = await self.connector.generate(
                 messages=messages,
                 temperature=0.5,  # Balanced for natural language
-                max_tokens=800,  # Reduced for faster responses
+                max_tokens=2000,  # Increased for comprehensive answers
             )
 
             # Log raw response for debugging
@@ -277,7 +277,7 @@ class GranitePresenter:
             async for chunk in self.connector.generate_stream(
                 messages=messages,
                 temperature=0.5,
-                max_tokens=800,
+                max_tokens=2000,  # Increased for comprehensive answers
             ):
                 yield chunk
 

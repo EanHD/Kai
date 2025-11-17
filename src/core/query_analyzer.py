@@ -41,6 +41,13 @@ class QueryAnalyzer:
         "status",
         "price",
         "weather",
+        "best",  # Product recommendations
+        "recommend",  # Recommendations need current data
+        "top",  # Top products/rankings
+        "compare",  # Product comparisons
+        "which",  # "which graphics card" etc
+        "should i buy",  # Shopping advice
+        "worth it",  # Product value questions
     ]
 
     # Implicit web search indicators (things that change frequently)
