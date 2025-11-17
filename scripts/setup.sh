@@ -34,8 +34,8 @@ fi
 echo
 echo "🐍 Setting up virtual environment..."
 if [ ! -d ".venv" ]; then
-    uv venv
-    echo "✅ Virtual environment created"
+    uv venv --python python3.11
+    echo "✅ Virtual environment created with Python 3.11"
 else
     echo "✅ Virtual environment exists"
 fi

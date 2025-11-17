@@ -21,7 +21,7 @@ fi
 # Check if uv is available
 if command -v uv &> /dev/null; then
     echo "Starting Kai API server with uv..."
-    exec uv run python main.py
+    exec uv run --python python3.11 python main.py
 else
     echo "Starting Kai API server with python..."
     exec python main.py
