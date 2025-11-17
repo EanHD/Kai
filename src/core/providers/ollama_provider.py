@@ -22,7 +22,8 @@ class OllamaProvider(LLMConnector):
         """
         super().__init__(model_config)
         self.base_url = base_url.rstrip("/")
-        self.client = httpx.AsyncClient(timeout=30.0)
+        # Use 120s timeout for slower CPUs (Pentium G3258 etc)
+        self.client = httpx.AsyncClient(timeout=120.0)
 
     async def generate(
         self,
@@ -148,7 +149,7 @@ class OllamaProvider(LLMConnector):
                 "POST",
                 f"{self.base_url}/api/chat",
                 json=payload,
-                timeout=60.0,
+                timeout=120.0,  # 2 minutes for slower CPUs
             ) as response:
                 response.raise_for_status()
 
