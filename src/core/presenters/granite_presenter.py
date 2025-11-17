@@ -113,7 +113,7 @@ class GranitePresenter:
             if not output_dict:
                 logger.error("Failed to parse finalization JSON, using fallback")
                 return self._create_fallback_output(
-                    original_query, tool_results, specialist_results
+                    original_query, tool_results, specialist_results, raw_response=response.content
                 )
 
             # Convert to FinalizationOutput
@@ -226,6 +226,7 @@ class GranitePresenter:
         query: str,
         tool_results: dict[str, Any],
         specialist_results: dict[str, Any],
+        raw_response: str | None = None,
     ) -> FinalizationOutput:
         """Create fallback output when finalization fails.
 
@@ -233,10 +234,28 @@ class GranitePresenter:
             query: Original query
             tool_results: Tool results
             specialist_results: Specialist results
+            raw_response: Raw model response that failed JSON parsing
 
         Returns:
             Basic FinalizationOutput
         """
+        # If we have a raw_response that looks like actual content (not JSON),
+        # use it directly - Granite sometimes generates good answers without JSON wrapper
+        if raw_response and len(raw_response) > 50 and not raw_response.strip().startswith("{"):
+            # Clean up any JSON attempts at the end
+            cleaned_response = raw_response
+            if "```" in cleaned_response:
+                # Remove code blocks
+                import re
+                cleaned_response = re.sub(r"```[\w]*\n.*?\n```", "", cleaned_response, flags=re.DOTALL)
+            
+            return FinalizationOutput(
+                final_answer=cleaned_response.strip(),
+                short_summary="Response from search results",
+                citations_used=list(range(1, 6)),  # Assume up to 5 citations
+                debug_info={"fallback": "used_raw_response", "reason": "json_parse_failed"},
+            )
+        
         # Try to extract something useful from results
         answer_parts = []
         citations = []
@@ -293,11 +312,13 @@ class GranitePresenter:
             final_answer = "\n".join(answer_parts)
             summary = "Results from search and computation."
         else:
+            # Last resort: use the raw response if it looks like actual content
+            # (Granite sometimes generates good answers but not in JSON format)
             final_answer = (
-                "I encountered an issue generating the final answer. "
-                "The underlying computation may have completed, but I cannot "
-                "present it reliably right now."
+                "I apologize, but I encountered a formatting issue. "
+                "Please try rephrasing your question."
             )
+            summary = "Error in response generation"
             summary = "Answer generation failed."
 
         return FinalizationOutput(

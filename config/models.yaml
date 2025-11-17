@@ -28,7 +28,22 @@
 # - active: Set to false to disable without deleting config
 
 models:
-  # Local Model (Ollama) - Free, Fast, Privacy-First
+  # Local Model - Llama 3.2 3B (Recommended for balanced performance)
+  # Best for: Good reasoning at faster speeds than granite4
+  - model_id: llama32-3b
+    model_name: llama3.2:3b  # Run: ollama pull llama3.2:3b
+    provider: ollama
+    capabilities:
+      - chat
+      - function_calling
+    context_window: 128000  # 128k tokens
+    cost_per_1k_input: 0.0
+    cost_per_1k_output: 0.0
+    routing_priority: 10  # FREE - try first!
+    is_local: true
+    active: true
+
+  # Local Model (Ollama) - Granite 4 Micro (Alternative)
   # Best for: Simple queries, casual conversation, quick facts
   - model_id: granite4-micro
     model_name: granite4:micro-h  # Run: ollama pull granite4:micro-h
@@ -39,7 +54,7 @@ models:
     context_window: 2000000  # 2M tokens!
     cost_per_1k_input: 0.0
     cost_per_1k_output: 0.0
-    routing_priority: 10  # FREE - always try first!
+    routing_priority: 9  # FREE - fallback local model
     is_local: true
     active: true
 
