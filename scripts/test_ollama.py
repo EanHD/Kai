@@ -71,6 +71,9 @@ async def test_ollama():
             return False
         except Exception as e:
             print(f"   ❌ Generation failed: {e}")
+            import traceback
+            print(f"   📋 Full traceback:")
+            traceback.print_exc()
             return False
         
         print("✅ All tests passed! Ollama is working correctly.")
