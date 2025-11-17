@@ -1,6 +1,6 @@
 #!/bin/bash
 # Setup script for systems without AVX support (e.g., Pentium G3258)
-# This script builds pyarrow from source to avoid AVX instructions
+# Uses older compatible package versions instead of building from source
 
 set -e
 
@@ -16,20 +16,11 @@ cd "$PROJECT_ROOT"
 # Check Python 3.11 is available
 if ! command -v python3.11 &> /dev/null; then
     echo "❌ Error: python3.11 not found"
-    echo "Install with: sudo apt install python3.11 python3.11-venv python3.11-dev"
+    echo "Install with: sudo apt install python3.11 python3.11-venv"
     exit 1
 fi
 
 echo "✓ Found Python 3.11: $(python3.11 --version)"
-
-# Check if system cmake is available
-if ! command -v cmake &> /dev/null; then
-    echo "❌ Error: cmake not found"
-    echo "Install with: sudo apt install cmake build-essential"
-    exit 1
-fi
-
-echo "✓ Found cmake: $(cmake --version | head -n1)"
 
 # Remove existing venv
 if [ -d ".venv" ]; then
@@ -43,27 +34,20 @@ python3.11 -m venv .venv
 source .venv/bin/activate
 
 # Upgrade pip and install build tools
-echo "⬆️  Upgrading pip and installing build tools..."
+echo "⬆️  Upgrading pip and setuptools..."
 pip install --upgrade pip setuptools wheel
 
-# Install cython needed for building pyarrow
-echo "📚 Installing build dependencies..."
-pip install cython
+# Install older numpy without AVX requirements
+echo "🔢 Installing numpy 1.24.4 (compatible with non-AVX CPUs)..."
+pip install 'numpy<2.0'
 
-# Install numpy first (needed by pyarrow)
-echo "🔢 Installing numpy (may take a few minutes)..."
-pip install numpy
+# Install older pyarrow that works without AVX
+echo "📦 Installing pyarrow 14.0.1 (compatible with non-AVX CPUs)..."
+pip install 'pyarrow==14.0.1'
 
-# Install pyarrow from source WITHOUT AVX
-echo "🏗️  Building pyarrow from source (this will take 10-20 minutes)..."
-echo "   Note: Building without AVX/AVX2 optimizations for CPU compatibility"
-
-# Set environment variables to disable SIMD optimizations
-export PYARROW_CMAKE_OPTIONS="-DARROW_SIMD_LEVEL=NONE -DARROW_RUNTIME_SIMD_LEVEL=NONE"
-export PYARROW_PARALLEL=2  # Use 2 cores for building (Pentium G3258 has 2 cores)
-
-# Install pyarrow from source (use system cmake, not pip cmake)
-pip install --no-binary pyarrow pyarrow
+# Install lancedb with specific version constraints
+echo "📚 Installing lancedb with compatible dependencies..."
+pip install 'lancedb>=0.3.0,<0.15.0'
 
 # Install remaining dependencies normally
 echo "📦 Installing remaining dependencies..."
