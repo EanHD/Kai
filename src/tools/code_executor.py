@@ -72,12 +72,14 @@ class CodeExecutorTool(BaseTool):
             self.docker_client.images.get(self.image)
             logger.info(f"Docker image {self.image} found")
         except ImageNotFound:
-            logger.warning(f"Image {self.image} not found, using python:3.11-slim instead")
+            original_image = self.image
             self.image = "python:3.11-slim"
+            logger.warning(f"Image {original_image} not found, pulling {self.image} as fallback")
             try:
                 self.docker_client.images.pull(self.image)
+                logger.info(f"Successfully pulled {self.image}")
             except DockerException as e:
-                logger.error(f"Failed to pull fallback image: {e}")
+                logger.error(f"Failed to pull fallback image {self.image}: {e}")
 
     def _detect_gvisor_runtime(self):
         """Check if gVisor runtime is available."""
