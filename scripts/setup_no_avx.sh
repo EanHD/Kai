@@ -49,9 +49,21 @@ pip install 'pyarrow==14.0.1'
 echo "📚 Installing lancedb with compatible dependencies..."
 pip install 'lancedb>=0.3.0,<0.15.0'
 
-# Install remaining dependencies normally
-echo "📦 Installing remaining dependencies..."
+# Install remaining dependencies WITHOUT the uvloop package (has AVX)
+echo "📦 Installing Kai dependencies (excluding AVX-dependent packages)..."
+
+# Temporarily modify pyproject.toml to exclude uvicorn[standard]
+sed -i 's/uvicorn\[standard\]/uvicorn/g' pyproject.toml
+
+# Install Kai
 pip install -e .
+
+# Restore pyproject.toml
+git checkout pyproject.toml 2>/dev/null || true
+
+echo ""
+echo "⚠️  NOTE: uvloop is NOT installed (requires AVX)"
+echo "   Uvicorn will use asyncio instead (slightly slower but compatible)"
 
 echo ""
 echo "✅ Setup complete!"
