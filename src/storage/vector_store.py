@@ -138,6 +138,7 @@ class VectorStore:
         # Convert ChromaDB results to our format
         # ChromaDB returns distances (lower is better), we want similarity (higher is better)
         # Convert distance to similarity: similarity = 1 / (1 + distance)
+        # Flatten metadata to top level for compatibility with existing code
         formatted_results = []
         if results['ids'] and len(results['ids'][0]) > 0:
             for i, id_val in enumerate(results['ids'][0]):
@@ -145,13 +146,22 @@ class VectorStore:
                 similarity = 1.0 / (1.0 + distance)
                 
                 if similarity >= similarity_threshold:
-                    formatted_results.append({
+                    metadata = results['metadatas'][0][i]
+                    result = {
                         "memory_id": id_val,
                         "content": results['documents'][0][i],
-                        "metadata": results['metadatas'][0][i],
                         "_distance": distance,
                         "_similarity": similarity,
-                    })
+                        # Flatten metadata fields to top level for compatibility
+                        "user_id": metadata.get("user_id"),
+                        "memory_type": metadata.get("memory_type"),
+                        "timestamp": metadata.get("timestamp"),
+                    }
+                    # Include any additional metadata fields
+                    for key, value in metadata.items():
+                        if key not in ["user_id", "memory_type", "timestamp"]:
+                            result[key] = value
+                    formatted_results.append(result)
 
         return formatted_results
 
@@ -175,15 +185,23 @@ class VectorStore:
 
         results = self.user_memory.get(where=where_filter)
         
-        # Convert to our format
+        # Convert to our format with flattened metadata
         formatted_results = []
         if results['ids']:
             for i, id_val in enumerate(results['ids']):
-                formatted_results.append({
+                metadata = results['metadatas'][i]
+                result = {
                     "memory_id": id_val,
                     "content": results['documents'][i],
-                    "metadata": results['metadatas'][i],
-                })
+                    "user_id": metadata.get("user_id"),
+                    "memory_type": metadata.get("memory_type"),
+                    "timestamp": metadata.get("timestamp"),
+                }
+                # Include any additional metadata fields
+                for key, value in metadata.items():
+                    if key not in ["user_id", "memory_type", "timestamp"]:
+                        result[key] = value
+                formatted_results.append(result)
 
         return formatted_results
 
@@ -250,16 +268,26 @@ class VectorStore:
             where=where_filter
         )
 
-        # Convert to our format
+        # Convert to our format with flattened metadata
         formatted_results = []
         if results['ids'] and len(results['ids'][0]) > 0:
             for i, id_val in enumerate(results['ids'][0]):
-                formatted_results.append({
+                metadata = results['metadatas'][0][i]
+                result = {
                     "message_id": id_val,
                     "content": results['documents'][0][i],
-                    "metadata": results['metadatas'][0][i],
                     "_distance": results['distances'][0][i],
-                })
+                    # Flatten metadata fields
+                    "session_id": metadata.get("session_id"),
+                    "user_id": metadata.get("user_id"),
+                    "role": metadata.get("role"),
+                    "timestamp": metadata.get("timestamp"),
+                }
+                # Include any additional metadata fields
+                for key, value in metadata.items():
+                    if key not in ["session_id", "user_id", "role", "timestamp"]:
+                        result[key] = value
+                formatted_results.append(result)
 
         return formatted_results
 
@@ -328,13 +356,22 @@ class VectorStore:
                 similarity = 1.0 / (1.0 + distance)
                 
                 if similarity >= similarity_threshold:
-                    formatted_results.append({
+                    metadata = results['metadatas'][0][i]
+                    result = {
                         "result_id": id_val,
                         "result": results['documents'][0][i],
-                        "metadata": results['metadatas'][0][i],
                         "_distance": distance,
                         "_similarity": similarity,
-                    })
+                        # Flatten metadata fields
+                        "tool_name": metadata.get("tool_name"),
+                        "parameters_hash": metadata.get("parameters_hash"),
+                        "timestamp": metadata.get("timestamp"),
+                    }
+                    # Include any additional metadata fields
+                    for key, value in metadata.items():
+                        if key not in ["tool_name", "parameters_hash", "timestamp"]:
+                            result[key] = value
+                    formatted_results.append(result)
 
         return formatted_results
 
@@ -353,10 +390,19 @@ class VectorStore:
         )
         
         if results['ids'] and len(results['ids']) > 0:
-            return {
+            metadata = results['metadatas'][0]
+            result = {
                 "result_id": results['ids'][0],
                 "result": results['documents'][0],
-                "metadata": results['metadatas'][0],
+                # Flatten metadata fields
+                "tool_name": metadata.get("tool_name"),
+                "parameters_hash": metadata.get("parameters_hash"),
+                "timestamp": metadata.get("timestamp"),
             }
+            # Include any additional metadata fields
+            for key, value in metadata.items():
+                if key not in ["tool_name", "parameters_hash", "timestamp"]:
+                    result[key] = value
+            return result
         
         return None
