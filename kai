@@ -20,6 +20,28 @@ if [ -d ".venv" ]; then
     exec python -m src.cli.main "$@"
 fi
 
+#!/bin/bash
+# Kai CLI entry point with dependency checks
+
+# Get absolute path to script directory (project root)
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)" || exit 1
+
+# Change to project root
+cd "$SCRIPT_DIR" || exit 1
+
+# Check if we have a virtual environment
+if [ -d ".venv" ]; then
+    echo "🔍 Using existing virtual environment"
+    source .venv/bin/activate
+    
+    # Check Python version and executable
+    echo "   Python: $(python --version 2>&1)"
+    echo "   Executable: $(python -c 'import sys; print(sys.executable)' 2>&1)"
+    echo ""
+    
+    exec python -m src.cli.main "$@"
+fi
+
 # Check if uv is available
 if ! command -v uv &> /dev/null; then
     echo "❌ Error: 'uv' not found in PATH"
@@ -28,8 +50,36 @@ if ! command -v uv &> /dev/null; then
     echo "  curl -LsSf https://astral.sh/uv/install.sh | sh"
     echo ""
     echo "Or create a virtual environment manually:"
-    echo "  cd '$SCRIPT_DIR' && python -m venv .venv && source .venv/bin/activate && pip install -e ."
+    echo "  cd '$SCRIPT_DIR' && python3.11 -m venv .venv && source .venv/bin/activate && pip install -e ."
     exit 1
+fi
+
+# Check Ollama is running (suppress errors if pgrep not found)
+if command -v pgrep &> /dev/null && ! pgrep -x "ollama" > /dev/null 2>&1; then
+    echo "⚠ Warning: Ollama not running (required for local models)"
+    echo "   Start with: ollama serve"
+fi
+
+# Try uv run with error handling for CPU compatibility issues
+# Force uv to use system Python 3.11 instead of downloading Python 3.12
+if ! uv run --directory "$SCRIPT_DIR" --python python3.11 python -m src.cli.main "$@" 2>&1; then
+    exit_code=$?
+    
+    # Exit code 132 = SIGILL (Illegal Instruction) - CPU incompatibility
+    if [ $exit_code -eq 132 ]; then
+        echo ""
+        echo "❌ CPU Compatibility Error (Exit 132: SIGILL)"
+        echo ""
+        echo "The Python binary or packages have CPU incompatibility issues."
+        echo ""
+        echo "Fix: Create virtual environment with system Python 3.11:"
+        echo "  python3.11 -m venv .venv"
+        echo "  source .venv/bin/activate"
+        echo "  pip install -e ."
+        echo "  ./kai"
+        echo ""
+    fi
+    exit $exit_code
 fi
 
 # Check Ollama is running (suppress errors if pgrep not found)
