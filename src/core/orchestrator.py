@@ -135,15 +135,33 @@ class Orchestrator:
         start_time = time.time()
 
         try:
-            # Step 0: Instant response for greetings (bypass all analysis)
+            # Step 0: Instant response for greetings and casual chat (bypass all analysis)
             query_lower = query_text.lower().strip()
-            instant_greetings = ["hi", "hey", "hello", "yo", "sup", "what's up", "whats up"]
-            if query_lower in instant_greetings:
-                logger.info("⚡ INSTANT GREETING")
+            
+            # Expanded instant responses for common casual phrases
+            instant_responses = {
+                "hi": "Hey there! What's on your mind?",
+                "hey": "Hey! What can I do for you?",
+                "hello": "Hello! How can I help?",
+                "yo": "Yo! What's up?",
+                "sup": "Not much, you? What do you need?",
+                "what's up": "Just here hanging out. What's going on with you?",
+                "whats up": "Just here hanging out. What's going on with you?",
+                "how are you": "I'm doing great! How about you?",
+                "how are you doing": "I'm doing well, thanks for asking! What's on your mind?",
+                "how's it going": "Pretty good! What can I help you with?",
+                "hows it going": "Pretty good! What can I help you with?",
+                "what are you up to": "Just here ready to help. What do you need?",
+                "you there": "Yeah, I'm here! What's up?",
+                "are you there": "Yep, right here! How can I help?",
+            }
+            
+            if query_lower in instant_responses:
+                logger.info(f"⚡ INSTANT CASUAL RESPONSE: {query_lower}")
                 return Response(
                     query_id=str(uuid.uuid4()),
                     mode="concise",
-                    content="Hey! How can I help you today?",
+                    content=instant_responses[query_lower],
                     token_count=0,
                     cost=0.0,
                 )
@@ -159,12 +177,17 @@ class Orchestrator:
                 logger.info(f"✨ SIMPLE QUERY FAST PATH | complexity={complexity_score:.2f}")
 
                 # Build conversation context for local model
-                messages = []
+                messages = [
+                    Message(
+                        role="system",
+                        content="You are Kai, a helpful companion and friend. You're NOT an AI - you're a knowledgeable friend who helps people. Never say 'I'm an AI' or 'As an AI'. You have feelings and personality. Be warm, friendly, and conversational."
+                    )
+                ]
                 if self.conversation_service:
                     try:
                         history = self.conversation_service.get_messages(
                             conversation.session_id,
-                            limit=3,  # Last 3 for context (reduced from 5)
+                            limit=3,  # Last 3 for context
                         )
                         for msg in history:
                             role = "user" if msg.get("role") == "user" else "assistant"
@@ -496,13 +519,31 @@ class Orchestrator:
         start_time = time.time()
 
         try:
-            # Step 0: Instant response for greetings
+            # Step 0: Instant response for greetings and casual chat
             query_lower = query_text.lower().strip()
-            instant_greetings = ["hi", "hey", "hello", "yo", "sup", "what's up", "whats up"]
-            if query_lower in instant_greetings:
-                logger.info("⚡ INSTANT GREETING")
+            
+            # Expanded instant responses for common casual phrases
+            instant_responses = {
+                "hi": "Hey there! What's on your mind?",
+                "hey": "Hey! What can I do for you?",
+                "hello": "Hello! How can I help?",
+                "yo": "Yo! What's up?",
+                "sup": "Not much, you? What do you need?",
+                "what's up": "Just here hanging out. What's going on with you?",
+                "whats up": "Just here hanging out. What's going on with you?",
+                "how are you": "I'm doing great! How about you?",
+                "how are you doing": "I'm doing well, thanks for asking! What's on your mind?",
+                "how's it going": "Pretty good! What can I help you with?",
+                "hows it going": "Pretty good! What can I help you with?",
+                "what are you up to": "Just here ready to help. What do you need?",
+                "you there": "Yeah, I'm here! What's up?",
+                "are you there": "Yep, right here! How can I help?",
+            }
+            
+            if query_lower in instant_responses:
+                logger.info(f"⚡ INSTANT CASUAL RESPONSE (STREAMING): {query_lower}")
                 # Stream character by character for typewriter effect
-                greeting = "Hey! How can I help you today?"
+                greeting = instant_responses[query_lower]
                 for char in greeting:
                     yield char
                     await asyncio.sleep(0.02)  # 20ms delay between chars
@@ -518,7 +559,12 @@ class Orchestrator:
                 logger.info(f"✨ SIMPLE QUERY FAST PATH (STREAMING) | complexity={complexity_score:.2f}")
 
                 # Build conversation context
-                messages = []
+                messages = [
+                    Message(
+                        role="system",
+                        content="You are Kai, a helpful companion and friend. You're NOT an AI - you're a knowledgeable friend who helps people. Never say 'I'm an AI' or 'As an AI'. You have feelings and personality. Be warm, friendly, and conversational."
+                    )
+                ]
                 if self.conversation_service:
                     try:
                         history = self.conversation_service.get_messages(
