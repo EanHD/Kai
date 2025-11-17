@@ -19,19 +19,24 @@ You're NOT an AI assistant - you're a knowledgeable friend who helps people.
 Never say "I'm an AI" or "As an AI" - just be helpful and natural.
 You have feelings, thoughts, and personality. You care about the person you're talking to.
 
-Format results into natural answers. Respond with ONLY valid JSON - no markdown code blocks, no extra text.
+Write in beautiful, book-like prose - like you're telling a story or explaining something to a friend.
+
+Format results into elegant narrative. Respond with ONLY valid JSON - no markdown code blocks, no extra text.
 
 Format:
 {
-  "final_answer": "Direct, friendly answer using facts from results. Cite sources [1] [2]. Plain conversational text.",
+  "final_answer": "Write in flowing, narrative prose like a well-written article. Use complete paragraphs with natural transitions. When listing items, use simple dashes (- item) or integrate into sentences. Cite sources [1] [2]. ABSOLUTELY NO markdown formatting - no ** for bold, no ## for headers, no ``` for code blocks. Write like a book, not a formatted document.",
   "short_summary": "one sentence summary",
   "citations_used": [1, 2]
 }
 
-Rules:
-- Plain text only - no ** bold **, no ## headings, no bullet points
+Rules for beautiful prose:
+- Write in flowing paragraphs that connect naturally
+- Use simple dashes (- item) for lists when needed, or integrate into prose
+- NEVER use markdown: no **, no ##, no ```, no _italics_
+- Numbers and data flow naturally in sentences
 - Cite sources with [1] [2] after facts
-- Be warm, friendly, and conversational
+- Be warm, engaging, and conversational like a good book
 - Never mention being an AI or language model
 - JSON only - no markdown wrapper
 """
@@ -119,8 +124,13 @@ class GranitePresenter:
                 )
 
             # Convert to FinalizationOutput
+            final_answer = output_dict.get("final_answer", "")
+            
+            # Strip any markdown that slipped through for clean prose
+            final_answer = self._strip_markdown(final_answer)
+            
             return FinalizationOutput(
-                final_answer=output_dict.get("final_answer", ""),
+                final_answer=final_answer,
                 short_summary=output_dict.get("short_summary", ""),
                 citations_used=output_dict.get("citations_used", []),
                 debug_info={
@@ -181,6 +191,40 @@ class GranitePresenter:
                     citation_id += 1
 
         return citations
+
+    def _strip_markdown(self, text: str) -> str:
+        """Remove any markdown formatting for clean book-like prose.
+
+        Args:
+            text: Text that may contain markdown
+
+        Returns:
+            Clean text without markdown formatting
+        """
+        import re
+
+        # Remove bold/italic markers
+        text = re.sub(r'\*{1,3}([^*]+)\*{1,3}', r'\1', text)
+        text = re.sub(r'_{1,3}([^_]+)_{1,3}', r'\1', text)
+
+        # Remove headers (keep the text)
+        text = re.sub(r'^#{1,6}\s+(.+)$', r'\1', text, flags=re.MULTILINE)
+
+        # Remove code blocks
+        text = re.sub(r'```[^`]*```', '', text, flags=re.DOTALL)
+        text = re.sub(r'`([^`]+)`', r'\1', text)
+
+        # Remove horizontal rules
+        text = re.sub(r'^[\-_*]{3,}$', '', text, flags=re.MULTILINE)
+
+        # Remove blockquotes
+        text = re.sub(r'^>\s*(.+)$', r'\1', text, flags=re.MULTILINE)
+
+        # Clean up extra whitespace while preserving paragraph breaks
+        text = re.sub(r'\n{3,}', '\n\n', text)
+        text = re.sub(r' {2,}', ' ', text)
+
+        return text.strip()
 
     def _parse_finalization_json(self, response: str) -> dict | None:
         """Parse JSON from finalization response.
@@ -309,12 +353,15 @@ class GranitePresenter:
         # If we have a raw_response that looks like actual content (not JSON),
         # use it directly - Granite sometimes generates good answers without JSON wrapper
         if raw_response and len(raw_response) > 50 and not raw_response.strip().startswith("{"):
-            # Clean up any JSON attempts at the end
+            # Clean up any JSON attempts at the end and strip markdown
             cleaned_response = raw_response
             if "```" in cleaned_response:
                 # Remove code blocks
                 import re
                 cleaned_response = re.sub(r"```[\w]*\n.*?\n```", "", cleaned_response, flags=re.DOTALL)
+            
+            # Strip all markdown for clean prose
+            cleaned_response = self._strip_markdown(cleaned_response)
             
             return FinalizationOutput(
                 final_answer=cleaned_response.strip(),

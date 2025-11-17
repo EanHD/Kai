@@ -100,6 +100,27 @@ class QueryAnalyzer:
         "recently",
         "just",
         "latest",
+        "new",  # New releases/products
+        "upcoming",  # Future events/products
+        "announced",  # Recent announcements
+    ]
+    
+    # Fresh information topics that always need web search
+    FRESH_INFO_TOPICS = [
+        "ai model",  # AI models evolve rapidly
+        "llm",  # Language models
+        "crypto",  # Cryptocurrency prices
+        "bitcoin",
+        "ethereum",
+        "stock",  # Stock prices
+        "news",  # News by definition
+        "weather",  # Weather changes
+        "sports",  # Sports scores
+        "election",  # Political events
+        "covid",  # Pandemic info
+        "vaccine",  # Medical updates
+        "release date",  # Product releases
+        "announcement",  # Company/product announcements
     ]
 
     CODE_EXEC_KEYWORDS = [
@@ -441,6 +462,11 @@ class QueryAnalyzer:
 
         # Time-sensitive queries - likely need current data
         if any(keyword in text for keyword in self.TIME_SENSITIVE):
+            return True
+
+        # Fresh information topics that always need web search
+        if any(topic in text for topic in self.FRESH_INFO_TOPICS):
+            logger.debug(f"Web search needed: fresh info topic detected")
             return True
 
         # Implicit indicators - things that change frequently

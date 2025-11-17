@@ -397,18 +397,36 @@ class CLI:
                 # Process query with streaming
                 print("💭 Thinking...", end="", flush=True)
 
-                # Collect streamed content
+                # Collect streamed content with natural pacing
                 full_content = []
                 print("\r" + " " * 20 + "\r", end="")  # Clear thinking message
                 print("💬 Kai: ", end="", flush=True)
 
+                # Stream with natural reading rhythm
+                char_count = 0
                 async for chunk in self.orchestrator.process_query_stream(
                     query_text=user_input,
                     conversation=self.conversation,
                     source="cli",
                 ):
-                    print(chunk, end="", flush=True)
-                    full_content.append(chunk)
+                    for char in chunk:
+                        print(char, end="", flush=True)
+                        full_content.append(char)
+                        
+                        # Natural pauses for better reading rhythm
+                        if char in '.!?':
+                            await asyncio.sleep(0.08)  # Sentence pause
+                        elif char in ',;:':
+                            await asyncio.sleep(0.04)  # Clause pause
+                        elif char == '\n':
+                            await asyncio.sleep(0.06)  # Paragraph pause
+                        else:
+                            # Very subtle base delay with variation for natural feel
+                            base_delay = 0.012
+                            variation = 0.003 * ((char_count % 5) / 5 - 0.5)
+                            await asyncio.sleep(max(0.008, base_delay + variation))
+                        
+                        char_count += 1
 
                 print()  # Newline after streaming complete
 
