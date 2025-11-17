@@ -14,7 +14,8 @@ async def test_ollama():
     print(f"   Base URL: {base_url}")
     print()
     
-    client = httpx.AsyncClient(timeout=10.0)
+    # Use longer timeout for slower CPUs (Pentium G3258 etc)
+    client = httpx.AsyncClient(timeout=60.0)  # 60 seconds for generation
     
     try:
         # Test 1: Check server is running
@@ -49,6 +50,7 @@ async def test_ollama():
         
         # Test 3: Try generating with the model
         print("3️⃣  Testing generation with granite4:micro-h...")
+        print("   ⏳ This may take 30-60 seconds on slower CPUs...")
         payload = {
             "model": "granite4:micro-h",
             "messages": [{"role": "user", "content": "Say 'test successful' and nothing else."}],
