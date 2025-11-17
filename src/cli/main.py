@@ -391,8 +391,11 @@ class CLI:
                     self._handle_memory_command(user_input)
                     continue
 
+                # Add newline after user input for clean separation
+                print()
+
                 # Process query with streaming
-                print("💭Thinking...", end="", flush=True)
+                print("💭 Thinking...", end="", flush=True)
 
                 # Collect streamed content
                 full_content = []
@@ -438,51 +441,14 @@ class CLI:
                     response.cost,
                 )
 
-                # Log episodic memory to file vault
-                episode_record = None
-                try:
-                    episode_record = self.memory_vault.add_episode(
-                        session_id=self.conversation.session_id,
-                        user_text=user_input,
-                        assistant_text=response.content,
-                        success=True,
-                        summary=response.format_content()[:200],
-                        confidence=min(max(response.confidence, 0.0), 1.0)
-                        if hasattr(response, "confidence")
-                        else None,
-                        tags=[response.mode] if hasattr(response, "mode") else [],
+                # Log episodic memory and reflection in background (non-blocking)
+                # This runs asynchronously so the next prompt appears immediately
+                asyncio.create_task(
+                    self._process_memory_and_reflection(
+                        user_input=user_input,
+                        response=response,
                     )
-                except Exception as e:
-                    logger.warning(f"Failed to write episodic memory: {e}")
-
-                # Generate reflection (always runs in background for continuous learning)
-                if self.reflection_agent and episode_record:
-                    try:
-                        if self.show_reflection:
-                            print("\n🔮 Reflecting on this interaction...")
-
-                        tools_used = (
-                            [t.tool_name for t in response.tool_results]
-                            if response.tool_results
-                            else []
-                        )
-                        await self.reflection_agent.reflect_on_episode(
-                            episode_id=episode_record.id,
-                            user_text=user_input,
-                            assistant_text=response.content,
-                            success=True,
-                            mode=response.mode,
-                            tools_used=tools_used,
-                        )
-
-                        if self.show_reflection:
-                            print("✓ Reflection complete - learning stored\n")
-                        elif self.debug:
-                            logger.debug(f"Generated reflection for episode {episode_record.id}")
-                    except Exception as e:
-                        if self.show_reflection:
-                            print(f"⚠️  Reflection failed: {e}\n")
-                        logger.warning(f"Failed to generate reflection: {e}")
+                )
 
                 # Response already displayed during streaming
                 # Display additional metadata
@@ -553,6 +519,66 @@ class CLI:
         if self.conversation:
             self.conversation_service.end_conversation(self.conversation.session_id)
             logger.info("Conversation ended")
+
+    async def _process_memory_and_reflection(
+        self,
+        user_input: str,
+        response,
+    ):
+        """Process episodic memory and reflection in background.
+
+        This runs asynchronously after response is displayed,
+        avoiding blocking the next user prompt.
+
+        Args:
+            user_input: User's query text
+            response: Response object from orchestrator
+        """
+        # Log episodic memory to file vault
+        episode_record = None
+        try:
+            episode_record = self.memory_vault.add_episode(
+                session_id=self.conversation.session_id,
+                user_text=user_input,
+                assistant_text=response.content,
+                success=True,
+                summary=response.format_content()[:200],
+                confidence=min(max(response.confidence, 0.0), 1.0)
+                if hasattr(response, "confidence")
+                else None,
+                tags=[response.mode] if hasattr(response, "mode") else [],
+            )
+        except Exception as e:
+            logger.warning(f"Failed to write episodic memory: {e}")
+
+        # Generate reflection (always runs in background for continuous learning)
+        if self.reflection_agent and episode_record:
+            try:
+                if self.show_reflection:
+                    print("\n🔮 Reflecting on this interaction...")
+
+                tools_used = (
+                    [t.tool_name for t in response.tool_results]
+                    if hasattr(response, "tool_results") and response.tool_results
+                    else []
+                )
+                await self.reflection_agent.reflect_on_episode(
+                    episode_id=episode_record.id,
+                    user_text=user_input,
+                    assistant_text=response.content,
+                    success=True,
+                    mode=response.mode,
+                    tools_used=tools_used,
+                )
+
+                if self.show_reflection:
+                    print("✓ Reflection complete - learning stored\n")
+                elif self.debug:
+                    logger.debug(f"Generated reflection for episode {episode_record.id}")
+            except Exception as e:
+                if self.show_reflection:
+                    print(f"⚠️  Reflection failed: {e}\n")
+                logger.warning(f"Failed to generate reflection: {e}")
 
     def _show_cost(self):
         """Display current conversation cost."""
