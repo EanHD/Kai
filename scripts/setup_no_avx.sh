@@ -22,6 +22,15 @@ fi
 
 echo "✓ Found Python 3.11: $(python3.11 --version)"
 
+# Check if system cmake is available
+if ! command -v cmake &> /dev/null; then
+    echo "❌ Error: cmake not found"
+    echo "Install with: sudo apt install cmake build-essential"
+    exit 1
+fi
+
+echo "✓ Found cmake: $(cmake --version | head -n1)"
+
 # Remove existing venv
 if [ -d ".venv" ]; then
     echo "🗑️  Removing existing virtual environment..."
@@ -37,9 +46,9 @@ source .venv/bin/activate
 echo "⬆️  Upgrading pip and installing build tools..."
 pip install --upgrade pip setuptools wheel
 
-# Install cmake and cython needed for building pyarrow
+# Install cython needed for building pyarrow
 echo "📚 Installing build dependencies..."
-pip install cmake cython
+pip install cython
 
 # Install numpy first (needed by pyarrow)
 echo "🔢 Installing numpy (may take a few minutes)..."
@@ -51,9 +60,9 @@ echo "   Note: Building without AVX/AVX2 optimizations for CPU compatibility"
 
 # Set environment variables to disable SIMD optimizations
 export PYARROW_CMAKE_OPTIONS="-DARROW_SIMD_LEVEL=NONE -DARROW_RUNTIME_SIMD_LEVEL=NONE"
-export PYARROW_PARALLEL=4  # Use 4 cores for building
+export PYARROW_PARALLEL=2  # Use 2 cores for building (Pentium G3258 has 2 cores)
 
-# Install pyarrow from source
+# Install pyarrow from source (use system cmake, not pip cmake)
 pip install --no-binary pyarrow pyarrow
 
 # Install remaining dependencies normally
