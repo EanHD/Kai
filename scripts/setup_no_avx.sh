@@ -41,13 +41,13 @@ pip install --upgrade pip setuptools wheel
 echo "🔢 Installing numpy 1.24.4 (compatible with non-AVX CPUs)..."
 pip install 'numpy<2.0'
 
-# Install older pyarrow that works without AVX
+# Install older pyarrow that works without AVX (chromadb dependency)
 echo "📦 Installing pyarrow 14.0.1 (compatible with non-AVX CPUs)..."
 pip install 'pyarrow==14.0.1'
 
-# Install lancedb with specific version constraints
-echo "📚 Installing lancedb with compatible dependencies..."
-pip install 'lancedb>=0.3.0,<0.15.0'
+# Install chromadb - works on non-AVX CPUs unlike lancedb
+echo "📚 Installing chromadb (vector database compatible with non-AVX CPUs)..."
+pip install 'chromadb>=0.4.0'
 
 # Install remaining dependencies WITHOUT the uvloop package (has AVX)
 echo "📦 Installing Kai dependencies (excluding AVX-dependent packages)..."

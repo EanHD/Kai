@@ -1,96 +1,75 @@
-"""LanceDB vector store implementation for embeddings and semantic search."""
+"""ChromaDB vector store implementation for embeddings and semantic search."""
 
+import json
 import logging
 from pathlib import Path
 from typing import Any
 
-import lancedb
-import pyarrow as pa
+try:
+    import chromadb
+    from chromadb.config import Settings
+    CHROMADB_AVAILABLE = True
+except ImportError:
+    CHROMADB_AVAILABLE = False
+    chromadb = None
 
 logger = logging.getLogger(__name__)
 
 
-# Define schemas using PyArrow (simpler than Pydantic for LanceDB)
-def get_user_memory_schema() -> pa.Schema:
-    """Get PyArrow schema for UserMemory table."""
-    return pa.schema(
-        [
-            pa.field("memory_id", pa.string()),
-            pa.field("user_id", pa.string()),
-            pa.field("memory_type", pa.string()),
-            pa.field("content", pa.string()),
-            pa.field("vector", pa.list_(pa.float32(), 384)),
-            pa.field("timestamp", pa.string()),
-            pa.field("metadata", pa.string()),  # JSON string
-        ]
-    )
-
-
-def get_conversation_history_schema() -> pa.Schema:
-    """Get PyArrow schema for ConversationHistory table."""
-    return pa.schema(
-        [
-            pa.field("message_id", pa.string()),
-            pa.field("session_id", pa.string()),
-            pa.field("user_id", pa.string()),
-            pa.field("role", pa.string()),
-            pa.field("content", pa.string()),
-            pa.field("vector", pa.list_(pa.float32(), 384)),
-            pa.field("timestamp", pa.string()),
-            pa.field("metadata", pa.string()),  # JSON string
-        ]
-    )
-
-
-def get_tool_results_schema() -> pa.Schema:
-    """Get PyArrow schema for ToolResults table."""
-    return pa.schema(
-        [
-            pa.field("result_id", pa.string()),
-            pa.field("tool_name", pa.string()),
-            pa.field("parameters_hash", pa.string()),
-            pa.field("result", pa.string()),
-            pa.field("vector", pa.list_(pa.float32(), 384)),
-            pa.field("timestamp", pa.string()),
-            pa.field("metadata", pa.string()),  # JSON string
-        ]
-    )
-
-
 class VectorStore:
-    """Manages LanceDB vector database operations."""
+    """Manages ChromaDB vector database operations."""
 
     def __init__(self, db_path: str):
         """Initialize vector store.
 
         Args:
-            db_path: Path to LanceDB database directory
+            db_path: Path to ChromaDB database directory
         """
+        if not CHROMADB_AVAILABLE:
+            logger.warning(
+                "ChromaDB not available. Vector storage disabled - using fallback memory storage."
+            )
+            self.client = None
+            self.db_path = None
+            return
+
         self.db_path = Path(db_path)
         self.db_path.mkdir(parents=True, exist_ok=True)
-        self.db = lancedb.connect(str(self.db_path))
-        self._init_tables()
+        
+        # Initialize ChromaDB client with persistent storage
+        self.client = chromadb.PersistentClient(
+            path=str(self.db_path),
+            settings=Settings(
+                anonymized_telemetry=False,
+                allow_reset=True,
+            )
+        )
+        
+        self._init_collections()
         logger.info(f"Vector store initialized at {self.db_path}")
 
-    def _init_tables(self):
-        """Initialize LanceDB tables if they don't exist."""
-        # Check existing tables
-        existing_tables = set(self.db.table_names())
+    def _init_collections(self):
+        """Initialize ChromaDB collections if they don't exist."""
+        if not self.client:
+            return
 
-        # Create UserMemory table if needed
-        if "user_memory" not in existing_tables:
-            self.db.create_table("user_memory", schema=get_user_memory_schema())
-            logger.info("Created user_memory table")
-
-        # Create ConversationHistory table if needed
-        if "conversation_history" not in existing_tables:
-            self.db.create_table("conversation_history", schema=get_conversation_history_schema())
-            logger.info("Created conversation_history table")
-
-        # Create ToolResults table if needed
-        if "tool_results" not in existing_tables:
-            self.db.create_table("tool_results", schema=get_tool_results_schema())
-            logger.info("Created tool_results table")
+        # Get or create collections
+        self.user_memory = self.client.get_or_create_collection(
+            name="user_memory",
+            metadata={"description": "User memories and preferences"}
+        )
+        
+        self.conversation_history = self.client.get_or_create_collection(
+            name="conversation_history",
+            metadata={"description": "Conversation history for context"}
+        )
+        
+        self.tool_results = self.client.get_or_create_collection(
+            name="tool_results",
+            metadata={"description": "Cached tool execution results"}
+        )
+        
+        logger.info("Vector store collections initialized")
 
     # User Memory operations
     def store_user_memory(
@@ -104,22 +83,23 @@ class VectorStore:
         metadata: dict[str, Any] | None = None,
     ) -> None:
         """Store user memory with embedding."""
-        import json
+        if not self.client:
+            logger.debug("Vector store not available, skipping memory storage")
+            return
 
-        table = self.db.open_table("user_memory")
-        data = [
-            {
-                "memory_id": memory_id,
-                "user_id": user_id,
-                "memory_type": memory_type,
-                "content": content,
-                "vector": vector,
-                "timestamp": timestamp,
-                "metadata": json.dumps(metadata or {}),
-            }
-        ]
-        table.add(data)
-
+        meta = {
+            "user_id": user_id,
+            "memory_type": memory_type,
+            "timestamp": timestamp,
+            **(metadata or {}),
+        }
+        
+        self.user_memory.add(
+            ids=[memory_id],
+            embeddings=[vector],
+            documents=[content],
+            metadatas=[meta]
+        )
     def search_user_memory(
         self,
         user_id: str,
@@ -134,44 +114,78 @@ class VectorStore:
             user_id: User to search memories for
             query_vector: Query embedding vector
             top_k: Number of results to return
-            similarity_threshold: Minimum similarity score
+            similarity_threshold: Minimum similarity score (ChromaDB uses distance, lower is better)
             memory_type: Optional filter by memory type
 
         Returns:
             List of matching memories with scores
         """
-        table = self.db.open_table("user_memory")
+        if not self.client:
+            return []
 
-        # Build filter
-        filter_str = f"user_id = '{user_id}'"
+        # Build where filter
+        where_filter = {"user_id": user_id}
         if memory_type:
-            filter_str += f" AND memory_type = '{memory_type}'"
+            where_filter["memory_type"] = memory_type
 
         # Execute search
-        results = (
-            table.search(query_vector).where(filter_str, prefilter=True).limit(top_k).to_list()
+        results = self.user_memory.query(
+            query_embeddings=[query_vector],
+            n_results=top_k,
+            where=where_filter
         )
 
-        # Filter by similarity threshold
-        filtered = [r for r in results if r.get("_distance", 0) >= similarity_threshold]
-        return filtered
+        # Convert ChromaDB results to our format
+        # ChromaDB returns distances (lower is better), we want similarity (higher is better)
+        # Convert distance to similarity: similarity = 1 / (1 + distance)
+        formatted_results = []
+        if results['ids'] and len(results['ids'][0]) > 0:
+            for i, id_val in enumerate(results['ids'][0]):
+                distance = results['distances'][0][i]
+                similarity = 1.0 / (1.0 + distance)
+                
+                if similarity >= similarity_threshold:
+                    formatted_results.append({
+                        "memory_id": id_val,
+                        "content": results['documents'][0][i],
+                        "metadata": results['metadatas'][0][i],
+                        "_distance": distance,
+                        "_similarity": similarity,
+                    })
+
+        return formatted_results
 
     def delete_user_memory(self, memory_id: str) -> None:
         """Delete specific user memory."""
-        table = self.db.open_table("user_memory")
-        table.delete(f"memory_id = '{memory_id}'")
+        if not self.client:
+            return
+            
+        self.user_memory.delete(ids=[memory_id])
 
     def get_user_memories(
         self, user_id: str, memory_type: str | None = None
     ) -> list[dict[str, Any]]:
         """Get all memories for a user, optionally filtered by type."""
-        table = self.db.open_table("user_memory")
-        filter_str = f"user_id = '{user_id}'"
-        if memory_type:
-            filter_str += f" AND memory_type = '{memory_type}'"
+        if not self.client:
+            return []
 
-        results = table.search().where(filter_str, prefilter=True).to_list()
-        return results
+        where_filter = {"user_id": user_id}
+        if memory_type:
+            where_filter["memory_type"] = memory_type
+
+        results = self.user_memory.get(where=where_filter)
+        
+        # Convert to our format
+        formatted_results = []
+        if results['ids']:
+            for i, id_val in enumerate(results['ids']):
+                formatted_results.append({
+                    "memory_id": id_val,
+                    "content": results['documents'][i],
+                    "metadata": results['metadatas'][i],
+                })
+
+        return formatted_results
 
     # Conversation History operations
     def store_conversation_message(
@@ -186,22 +200,24 @@ class VectorStore:
         metadata: dict[str, Any] | None = None,
     ) -> None:
         """Store conversation message with embedding."""
-        import json
+        if not self.client:
+            logger.debug("Vector store not available, skipping conversation storage")
+            return
 
-        table = self.db.open_table("conversation_history")
-        data = [
-            {
-                "message_id": message_id,
-                "session_id": session_id,
-                "user_id": user_id,
-                "role": role,
-                "content": content,
-                "vector": vector,
-                "timestamp": timestamp,
-                "metadata": json.dumps(metadata or {}),
-            }
-        ]
-        table.add(data)
+        meta = {
+            "session_id": session_id,
+            "user_id": user_id,
+            "role": role,
+            "timestamp": timestamp,
+            **(metadata or {}),
+        }
+        
+        self.conversation_history.add(
+            ids=[message_id],
+            embeddings=[vector],
+            documents=[content],
+            metadatas=[meta]
+        )
 
     def search_conversation_history(
         self,
@@ -221,16 +237,31 @@ class VectorStore:
         Returns:
             List of matching messages
         """
-        table = self.db.open_table("conversation_history")
+        if not self.client:
+            return []
 
-        filter_str = f"user_id = '{user_id}'"
+        where_filter = {"user_id": user_id}
         if session_id:
-            filter_str += f" AND session_id = '{session_id}'"
+            where_filter["session_id"] = session_id
 
-        results = (
-            table.search(query_vector).where(filter_str, prefilter=True).limit(top_k).to_list()
+        results = self.conversation_history.query(
+            query_embeddings=[query_vector],
+            n_results=top_k,
+            where=where_filter
         )
-        return results
+
+        # Convert to our format
+        formatted_results = []
+        if results['ids'] and len(results['ids'][0]) > 0:
+            for i, id_val in enumerate(results['ids'][0]):
+                formatted_results.append({
+                    "message_id": id_val,
+                    "content": results['documents'][0][i],
+                    "metadata": results['metadatas'][0][i],
+                    "_distance": results['distances'][0][i],
+                })
+
+        return formatted_results
 
     # Tool Results caching operations
     def cache_tool_result(
@@ -244,21 +275,23 @@ class VectorStore:
         metadata: dict[str, Any] | None = None,
     ) -> None:
         """Cache tool execution result."""
-        import json
+        if not self.client:
+            logger.debug("Vector store not available, skipping tool cache")
+            return
 
-        table = self.db.open_table("tool_results")
-        data = [
-            {
-                "result_id": result_id,
-                "tool_name": tool_name,
-                "parameters_hash": parameters_hash,
-                "result": result,
-                "vector": vector,
-                "timestamp": timestamp,
-                "metadata": json.dumps(metadata or {}),
-            }
-        ]
-        table.add(data)
+        meta = {
+            "tool_name": tool_name,
+            "parameters_hash": parameters_hash,
+            "timestamp": timestamp,
+            **(metadata or {}),
+        }
+        
+        self.tool_results.add(
+            ids=[result_id],
+            embeddings=[vector],
+            documents=[result],
+            metadatas=[meta]
+        )
 
     def search_cached_results(
         self,
@@ -278,31 +311,52 @@ class VectorStore:
         Returns:
             List of matching cached results
         """
-        table = self.db.open_table("tool_results")
+        if not self.client:
+            return []
 
-        results = (
-            table.search(query_vector)
-            .where(f"tool_name = '{tool_name}'", prefilter=True)
-            .limit(top_k)
-            .to_list()
+        results = self.tool_results.query(
+            query_embeddings=[query_vector],
+            n_results=top_k,
+            where={"tool_name": tool_name}
         )
 
         # High threshold for cache hits - must be very similar
-        filtered = [r for r in results if r.get("_distance", 0) >= similarity_threshold]
-        return filtered
+        formatted_results = []
+        if results['ids'] and len(results['ids'][0]) > 0:
+            for i, id_val in enumerate(results['ids'][0]):
+                distance = results['distances'][0][i]
+                similarity = 1.0 / (1.0 + distance)
+                
+                if similarity >= similarity_threshold:
+                    formatted_results.append({
+                        "result_id": id_val,
+                        "result": results['documents'][0][i],
+                        "metadata": results['metadatas'][0][i],
+                        "_distance": distance,
+                        "_similarity": similarity,
+                    })
+
+        return formatted_results
 
     def get_cached_result_by_hash(
         self, tool_name: str, parameters_hash: str
     ) -> dict[str, Any] | None:
         """Get exact cache hit by parameter hash."""
-        table = self.db.open_table("tool_results")
-        results = (
-            table.search()
-            .where(
-                f"tool_name = '{tool_name}' AND parameters_hash = '{parameters_hash}'",
-                prefilter=True,
-            )
-            .limit(1)
-            .to_list()
+        if not self.client:
+            return None
+
+        results = self.tool_results.get(
+            where={
+                "tool_name": tool_name,
+                "parameters_hash": parameters_hash
+            }
         )
-        return results[0] if results else None
+        
+        if results['ids'] and len(results['ids']) > 0:
+            return {
+                "result_id": results['ids'][0],
+                "result": results['documents'][0],
+                "metadata": results['metadatas'][0],
+            }
+        
+        return None
