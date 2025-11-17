@@ -56,6 +56,14 @@ class CodeExecutorTool(BaseTool):
             )
         except DockerException as e:
             logger.error(f"Failed to initialize Docker client: {e}")
+            if "Permission denied" in str(e):
+                logger.error(
+                    "Docker permission error. Fix with:\n"
+                    "  sudo usermod -aG docker $USER\n"
+                    "  sudo chmod 666 /var/run/docker.sock\n"
+                    "  newgrp docker\n"
+                    "Or run: ./scripts/fix_docker_permissions.sh"
+                )
             self.docker_client = None
 
     def _verify_image(self):
@@ -102,7 +110,12 @@ class CodeExecutorTool(BaseTool):
             return ToolResult(
                 tool_name=self.tool_name,
                 status=ToolStatus.FAILED,
-                error="Docker client not available. Ensure Docker is running.",
+                error=(
+                    "Docker client not available. Please ensure:\n"
+                    "1. Docker is installed and running\n"
+                    "2. Your user has Docker permissions\n"
+                    "Fix with: ./scripts/fix_docker_permissions.sh"
+                ),
                 fallback_used=True,
             )
 
