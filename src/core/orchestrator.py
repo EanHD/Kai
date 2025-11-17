@@ -1,5 +1,6 @@
 """Main orchestrator for query routing and response generation."""
 
+import asyncio
 import logging
 import os
 import time
@@ -134,14 +135,27 @@ class Orchestrator:
         start_time = time.time()
 
         try:
-            # Step 0: Quick complexity check for simple queries
-            # This saves expensive Grok calls for greetings/chitchat
+            # Step 0: Instant response for greetings (bypass all analysis)
+            query_lower = query_text.lower().strip()
+            instant_greetings = ["hi", "hey", "hello", "yo", "sup", "what's up", "whats up"]
+            if query_lower in instant_greetings:
+                logger.info("⚡ INSTANT GREETING")
+                return Response(
+                    query_id=str(uuid.uuid4()),
+                    mode="concise",
+                    content="Hey! How can I help you today?",
+                    token_count=0,
+                    cost=0.0,
+                )
+
+            # Step 1: Quick complexity check for simple queries
+            # This saves expensive Grok calls for chitchat
             quick_analysis = self.query_analyzer.analyze(query_text)
             complexity_score = quick_analysis.get("complexity_score", 0.5)
             capabilities = quick_analysis.get("capabilities", [])
 
-            # Simple query fast path: no tools needed AND low complexity
-            if not capabilities and complexity_score < 0.3:
+            # Simple query fast path: no tools needed AND very low complexity
+            if not capabilities and complexity_score < 0.2:
                 logger.info(f"✨ SIMPLE QUERY FAST PATH | complexity={complexity_score:.2f}")
 
                 # Build conversation context for local model
@@ -150,7 +164,7 @@ class Orchestrator:
                     try:
                         history = self.conversation_service.get_messages(
                             conversation.session_id,
-                            limit=5,  # Last 5 for context
+                            limit=3,  # Last 3 for context (reduced from 5)
                         )
                         for msg in history:
                             role = "user" if msg.get("role") == "user" else "assistant"
@@ -165,7 +179,7 @@ class Orchestrator:
                 response = await self.local_connector.generate(
                     messages=messages,
                     temperature=0.7,
-                    max_tokens=512,
+                    max_tokens=256,  # Reduced from 512 for faster response
                 )
 
                 elapsed = time.time() - start_time
@@ -451,3 +465,169 @@ class Orchestrator:
             True if offline mode is active, False otherwise
         """
         return self._offline_mode
+
+    async def process_query_stream(
+        self,
+        query_text: str,
+        conversation: ConversationSession,
+        source: str = "api",
+        emotional_tone: dict[str, Any] | None = None,
+    ):
+        """Process query with streaming response.
+
+        Flow:
+        1. Analyzer generates plan (non-streaming)
+        2. Executor runs steps (non-streaming)
+        3. Presenter streams the final answer
+
+        Args:
+            query_text: User's query
+            conversation: Conversation session
+            source: Source of query ("cli" or "api")
+            emotional_tone: Optional emotional tone
+
+        Yields:
+            Content chunks as they are generated
+        """
+        logger.info(
+            f"🔍 QUERY START (STREAMING) | session={conversation.session_id} | source={source} | "
+            f"query_length={len(query_text)} | user={conversation.user_id}"
+        )
+        start_time = time.time()
+
+        try:
+            # Step 0: Instant response for greetings
+            query_lower = query_text.lower().strip()
+            instant_greetings = ["hi", "hey", "hello", "yo", "sup", "what's up", "whats up"]
+            if query_lower in instant_greetings:
+                logger.info("⚡ INSTANT GREETING")
+                # Stream character by character for typewriter effect
+                greeting = "Hey! How can I help you today?"
+                for char in greeting:
+                    yield char
+                    await asyncio.sleep(0.02)  # 20ms delay between chars
+                return
+
+            # Step 1: Quick complexity check
+            quick_analysis = self.query_analyzer.analyze(query_text)
+            complexity_score = quick_analysis.get("complexity_score", 0.5)
+            capabilities = quick_analysis.get("capabilities", [])
+
+            # Simple query fast path with streaming
+            if not capabilities and complexity_score < 0.2:
+                logger.info(f"✨ SIMPLE QUERY FAST PATH (STREAMING) | complexity={complexity_score:.2f}")
+
+                # Build conversation context
+                messages = []
+                if self.conversation_service:
+                    try:
+                        history = self.conversation_service.get_messages(
+                            conversation.session_id,
+                            limit=3,
+                        )
+                        for msg in history:
+                            role = "user" if msg.get("role") == "user" else "assistant"
+                            messages.append(Message(role=role, content=msg.get("content", "")))
+                    except Exception as e:
+                        logger.warning(f"Failed to get history for fast path: {e}")
+
+                messages.append(Message(role="user", content=query_text))
+
+                # Stream from local model
+                async for chunk in self.local_connector.generate_stream(
+                    messages=messages,
+                    temperature=0.7,
+                    max_tokens=256,
+                ):
+                    yield chunk
+
+                elapsed = time.time() - start_time
+                logger.info(f"✅ FAST PATH STREAM COMPLETE | time={elapsed:.2f}s")
+                return
+
+            # Complex query: use full pipeline, stream presentation
+            logger.info(
+                f"🎯 COMPLEX QUERY PATH (STREAMING) | complexity={complexity_score:.2f} | "
+                f"capabilities={capabilities}"
+            )
+
+            # Get conversation context
+            conversation_context = []
+            if self.conversation_service:
+                try:
+                    messages = self.conversation_service.get_messages(
+                        conversation.session_id,
+                        limit=3,
+                    )
+                    conversation_context = messages
+                except Exception as e:
+                    logger.warning(f"Failed to get context for planning: {e}")
+
+            # Step 1: Analyze → Plan (non-streaming)
+            plan = await self.plan_analyzer.analyze(
+                query_text,
+                source=source,
+                context={"conversation_history": conversation_context}
+                if conversation_context
+                else None,
+            )
+
+            logger.info(
+                f"📋 PLAN GENERATED | intent={plan.intent} | "
+                f"complexity={plan.complexity.value} | "
+                f"steps={len(plan.steps)}"
+            )
+
+            # Step 2: Execute → Results (non-streaming)
+            execution_results = await self.plan_executor.execute(plan)
+
+            if not isinstance(execution_results, dict):
+                execution_results = {"tool_results": {}, "specialist_results": {}}
+
+            tool_results = execution_results.get("tool_results", {})
+            specialist_results = execution_results.get("specialist_results", {})
+
+            logger.info(
+                f"⚙️  EXECUTION COMPLETE | "
+                f"tools={len(tool_results)} | "
+                f"specialists={len(specialist_results)}"
+            )
+
+            # Get conversation history for presenter
+            conversation_history = []
+            if self.conversation_service:
+                try:
+                    messages = self.conversation_service.get_messages(
+                        conversation.session_id, limit=10
+                    )
+                    conversation_history = messages
+                except Exception as e:
+                    logger.warning(f"Failed to retrieve conversation history: {e}")
+
+            # Step 3: Stream final presentation
+            async for chunk in self.presenter.finalize_stream(
+                original_query=query_text,
+                plan=plan.to_dict(),
+                tool_results=tool_results,
+                specialist_results=specialist_results,
+                conversation_history=conversation_history,
+            ):
+                yield chunk
+
+            elapsed_time = time.time() - start_time
+            logger.info(f"✅ QUERY STREAM COMPLETE | time={elapsed_time:.2f}s")
+
+        except Exception as e:
+            elapsed_time = time.time() - start_time
+            logger.error(
+                f"❌ QUERY STREAM FAILED | error={type(e).__name__} | "
+                f"message={str(e)} | time={elapsed_time:.2f}s",
+                exc_info=True,
+            )
+            error_msg = (
+                "I encountered an issue processing your request. "
+                "Please try rephrasing your question or try again later."
+            )
+            for char in error_msg:
+                yield char
+                await asyncio.sleep(0.01)

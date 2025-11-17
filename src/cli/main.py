@@ -391,17 +391,33 @@ class CLI:
                     self._handle_memory_command(user_input)
                     continue
 
-                # Process query
+                # Process query with streaming
                 print("💭Thinking...", end="", flush=True)
 
-                response = await self.orchestrator.process_query(
+                # Collect streamed content
+                full_content = []
+                print("\r" + " " * 20 + "\r", end="")  # Clear thinking message
+                print("💬 Kai: ", end="", flush=True)
+
+                async for chunk in self.orchestrator.process_query_stream(
                     query_text=user_input,
                     conversation=self.conversation,
                     source="cli",
-                )
+                ):
+                    print(chunk, end="", flush=True)
+                    full_content.append(chunk)
 
-                # Clear "Thinking..." message
-                print("\r" + " " * 20 + "\r", end="\n")
+                print()  # Newline after streaming complete
+
+                # Create response object from streamed content
+                from src.models.response import Response
+                response = Response(
+                    query_id=str(uuid.uuid4()),
+                    mode="concise",
+                    content="".join(full_content),
+                    token_count=0,
+                    cost=0.0,
+                )
 
                 # Save messages to database
                 query_data = {
@@ -468,30 +484,28 @@ class CLI:
                             print(f"⚠️  Reflection failed: {e}\n")
                         logger.warning(f"Failed to generate reflection: {e}")
 
-                # Display response with mode indicator
-                mode_emoji = {"concise": "💬", "expert": "🎓", "advisor": "🤝"}
-                mode_indicator = mode_emoji.get(response.mode, "💬")
-
-                print(f"{mode_indicator} Kai: {response.format_content()}")
+                # Response already displayed during streaming
+                # Display additional metadata
 
                 # Display code execution results if present
-                code_results = [t for t in response.tool_results if t.tool_name == "code_exec"]
-                if code_results:
-                    print("\n🔬 Code Execution:")
-                    for result in code_results:
-                        stdout = result.data.get("stdout", "")
-                        stderr = result.data.get("stderr", "")
-                        exit_code = result.data.get("exit_code", -1)
+                if hasattr(response, 'tool_results') and response.tool_results:
+                    code_results = [t for t in response.tool_results if t.tool_name == "code_exec"]
+                    if code_results:
+                        print("\n🔬 Code Execution:")
+                        for result in code_results:
+                            stdout = result.data.get("stdout", "")
+                            stderr = result.data.get("stderr", "")
+                            exit_code = result.data.get("exit_code", -1)
 
-                        if stdout:
-                            print(f"   Output: {stdout}")
-                        if stderr:
-                            print(f"   Errors: {stderr}")
-                        if exit_code != 0:
-                            print(f"   Exit Code: {exit_code}")
+                            if stdout:
+                                print(f"   Output: {stdout}")
+                            if stderr:
+                                print(f"   Errors: {stderr}")
+                            if exit_code != 0:
+                                print(f"   Exit Code: {exit_code}")
 
                 # Display citations if present
-                if response.has_citations():
+                if hasattr(response, 'has_citations') and response.has_citations():
                     print("\n📚 Sources:")
                     for i, citation in enumerate(response.source_citations[:3], 1):
                         print(f"   {i}. {citation.title}")

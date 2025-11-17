@@ -299,32 +299,31 @@ class OrchestratorAdapter:
         if not query_text:
             raise ValueError("No user message found in request")
 
-        # Convert to Message objects
-        from src.core.llm_connector import Message
+        # Get or create conversation session
+        conversation = request.get("_conversation")
+        if not conversation:
+            from src.models.conversation import ConversationSession
 
-        message_objs = [
-            Message(role=msg.get("role", "user"), content=msg.get("content", ""))
-            for msg in messages
-        ]
+            conversation = ConversationSession(
+                user_id=request.get("user", "api-user"),
+                cost_limit=100.0,
+                request_source="api",
+            )
+            # Populate with message history
+            for msg in messages[:-1]:
+                conversation.add_to_context(
+                    {
+                        "role": msg.get("role", "user"),
+                        "content": msg.get("content", ""),
+                    }
+                )
 
-        # Get the appropriate connector
-        provider = request.get("provider", "ollama")
-        if provider == "ollama" and self.orchestrator.local_connector:
-            connector = self.orchestrator.local_connector
-        elif provider in self.orchestrator.external_connectors:
-            connector = self.orchestrator.external_connectors[provider]
-        else:
-            raise ValueError(f"Provider {provider} not available")
-
-        # Stream from connector
-        temperature = request.get("temperature", 0.7)
-        max_tokens = request.get("max_tokens")
-
+        # Stream from orchestrator
         try:
-            async for chunk in connector.generate_stream(
-                messages=message_objs,
-                temperature=temperature,
-                max_tokens=max_tokens,
+            async for chunk in self.orchestrator.process_query_stream(
+                query_text=query_text,
+                conversation=conversation,
+                source="api",
             ):
                 yield {
                     "delta": chunk,

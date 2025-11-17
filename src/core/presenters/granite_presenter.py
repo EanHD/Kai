@@ -15,23 +15,20 @@ logger = logging.getLogger(__name__)
 
 PRESENTER_SYSTEM_PROMPT = """You are Kai, a practical AI assistant.
 
-Your job: Format search/code results into natural answers with citations.
+Format results into natural answers. Respond with ONLY valid JSON - no markdown code blocks, no extra text.
 
-YOU MUST respond with ONLY valid JSON. No markdown, no explanations, no text before/after JSON.
-
-Response format:
+Format:
 {
-  "final_answer": "natural answer using facts from results, cite sources like [1] [2]",
+  "final_answer": "Direct answer using facts from results. Cite sources [1] [2]. No bold, no headings, just plain text.",
   "short_summary": "one sentence summary",
   "citations_used": [1, 2]
 }
 
-Tips:
-- Use facts from tool_results
-- Add citation numbers like [1] after facts
-- Be direct and helpful
-- If you used web search, say so
-- If you calculated something, show the result
+Rules:
+- Plain text only - no ** bold **, no ## headings, no bullet points
+- Cite sources with [1] [2] after facts
+- Be concise and direct
+- JSON only - no markdown wrapper
 """
 
 
@@ -101,7 +98,7 @@ class GranitePresenter:
             response = await self.connector.generate(
                 messages=messages,
                 temperature=0.5,  # Balanced for natural language
-                max_tokens=1500,
+                max_tokens=800,  # Reduced for faster responses
             )
 
             # Log raw response for debugging
@@ -220,6 +217,71 @@ class GranitePresenter:
         # Log the problematic response for debugging
         logger.warning(f"Failed to parse finalization JSON. Response preview: {response[:300]}...")
         return None
+
+    async def finalize_stream(
+        self,
+        original_query: str,
+        plan: dict[str, Any],
+        tool_results: dict[str, Any],
+        specialist_results: dict[str, Any],
+        conversation_history: list[dict[str, Any]] | None = None,
+        style_profile: str = "kai_default",
+    ):
+        """Stream final answer from structured results.
+
+        Args:
+            original_query: User's original query
+            plan: Execution plan
+            tool_results: Results from tools
+            specialist_results: Results from specialists
+            conversation_history: Recent conversation messages
+            style_profile: Style profile to use
+
+        Yields:
+            Content chunks as they are generated
+        """
+        # Build citation map
+        citation_map = self._build_citation_map(tool_results, specialist_results)
+
+        # Serialize specialist results
+        serialized_specialist_results = {}
+        for key, value in specialist_results.items():
+            if hasattr(value, "to_dict"):
+                serialized_specialist_results[key] = value.to_dict()
+            elif isinstance(value, dict):
+                serialized_specialist_results[key] = value
+            else:
+                serialized_specialist_results[key] = str(value)
+
+        # Build simplified input
+        simplified_input = {
+            "original_query": original_query,
+            "tool_results": tool_results,
+            "citations": citation_map,
+            "conversation_history": conversation_history or [],
+        }
+
+        # Call Granite presenter in streaming mode
+        messages = [
+            Message(role="system", content=PRESENTER_SYSTEM_PROMPT),
+            Message(role="user", content=json.dumps(simplified_input, indent=2)),
+        ]
+
+        try:
+            # Stream from connector
+            async for chunk in self.connector.generate_stream(
+                messages=messages,
+                temperature=0.5,
+                max_tokens=800,
+            ):
+                yield chunk
+
+        except Exception as e:
+            logger.error(f"Streaming finalization failed: {e}", exc_info=True)
+            # Fallback to simple answer
+            fallback_msg = "I apologize, but I encountered an error formatting the response."
+            for char in fallback_msg:
+                yield char
 
     def _create_fallback_output(
         self,
