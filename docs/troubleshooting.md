@@ -128,10 +128,10 @@
    print(table.to_pandas())
    ```
 
-2. Check embedding model is available:
-   ```bash
-   python -c "from sentence_transformers import SentenceTransformer; SentenceTransformer('sentence-transformers/all-MiniLM-L6-v2')"
-   ```
+2. Check embedding provider is configured:
+   - With OpenRouter API key: Uses remote embeddings
+   - Without API key: Uses mock embeddings (limited functionality)
+   - Configure `OPENROUTER_API_KEY` in `.env` for production use
 
 ---
 

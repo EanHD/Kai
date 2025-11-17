@@ -3,7 +3,7 @@
 import logging
 import time
 import uuid
-from typing import Any
+from typing import Any, Optional
 
 from src.lib.encryption import EncryptionManager
 from src.storage.vector_store import VectorStore
@@ -20,6 +20,7 @@ class MemoryStoreTool(BaseTool):
         config: dict[str, Any],
         vector_store: VectorStore,
         encryption_key: str,
+        embeddings_provider=None,
     ):
         """Initialize memory store tool.
 
@@ -27,43 +28,54 @@ class MemoryStoreTool(BaseTool):
             config: Tool configuration
             vector_store: Vector store instance
             encryption_key: Encryption key for sensitive data
+            embeddings_provider: Optional EmbeddingsProvider for semantic search
         """
         super().__init__(config)
         self.vector_store = vector_store
         self.encryption = EncryptionManager(encryption_key)
-        self.embedding_model = None
-        self._init_embedding_model()
+        self.embeddings_provider = embeddings_provider
 
-    def _init_embedding_model(self):
-        """Initialize sentence transformer model for embeddings."""
-        try:
-            from sentence_transformers import SentenceTransformer
-
-            model_name = "sentence-transformers/all-MiniLM-L6-v2"
-            self.embedding_model = SentenceTransformer(model_name)
-            logger.info(f"Loaded embedding model: {model_name}")
-        except ImportError:
-            logger.warning("sentence-transformers not installed, using mock embeddings")
-            self.embedding_model = None
+        if self.embeddings_provider:
+            logger.info("MemoryStoreTool initialized with embeddings provider")
+        else:
+            logger.warning(
+                "MemoryStoreTool initialized without embeddings - using mock vectors. "
+                "Set OPENROUTER_API_KEY to enable semantic search."
+            )
 
     def _generate_embedding(self, text: str) -> list[float]:
-        """Generate embedding for text.
+        """Generate embedding for text using the configured provider.
 
         Args:
             text: Text to embed
 
         Returns:
-            384-dimensional embedding vector
+            Embedding vector (real if provider available, mock otherwise)
         """
-        if self.embedding_model:
-            embedding = self.embedding_model.encode(text)
-            return embedding.tolist()
+        if self.embeddings_provider:
+            try:
+                embeddings = self.embeddings_provider.embed([text])
+                return embeddings[0] if embeddings else self._mock_embedding(text)
+            except Exception as e:
+                logger.warning(f"Embedding generation failed, using mock: {e}")
+                return self._mock_embedding(text)
         else:
-            # Mock embedding for testing without sentence-transformers
-            import random
+            return self._mock_embedding(text)
 
-            random.seed(hash(text) % (2**32))
-            return [random.random() for _ in range(384)]
+    def _mock_embedding(self, text: str, dimensions: int = 1536) -> list[float]:
+        """Generate mock embedding for testing without embeddings provider.
+
+        Args:
+            text: Text to embed
+            dimensions: Vector dimensions (default: 1536 for text-embedding-3-small compatibility)
+
+        Returns:
+            Deterministic pseudo-random vector
+        """
+        import random
+
+        random.seed(hash(text) % (2**32))
+        return [random.random() for _ in range(dimensions)]
 
     async def execute(self, parameters: dict[str, Any]) -> ToolResult:
         """Execute memory operation.

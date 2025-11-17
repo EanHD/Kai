@@ -1046,7 +1046,6 @@ dependencies = [
     { name = "python-dotenv" },
     { name = "python-multipart" },
     { name = "pyyaml" },
-    { name = "sentence-transformers" },
     { name = "sse-starlette" },
     { name = "tiktoken" },
     { name = "uvicorn", extra = ["standard"] },
@@ -1054,11 +1053,7 @@ dependencies = [
 ]
 
 [package.optional-dependencies]
-all = [
-    { name = "sentence-transformers" },
-    { name = "torch" },
-]
-embeddings = [
+local-embeddings = [
     { name = "sentence-transformers" },
     { name = "torch" },
 ]
@@ -1083,13 +1078,10 @@ requires-dist = [
     { name = "python-dotenv", specifier = ">=1.0.0" },
     { name = "python-multipart", specifier = ">=0.0.6" },
     { name = "pyyaml", specifier = ">=6.0.1" },
-    { name = "sentence-transformers", specifier = ">=5.1.2" },
-    { name = "sentence-transformers", marker = "extra == 'all'", specifier = ">=2.2.0" },
-    { name = "sentence-transformers", marker = "extra == 'embeddings'", specifier = ">=2.2.0" },
+    { name = "sentence-transformers", marker = "extra == 'local-embeddings'", specifier = ">=5.1.2" },
     { name = "sse-starlette", specifier = ">=1.6.0" },
     { name = "tiktoken", specifier = ">=0.12.0" },
-    { name = "torch", marker = "extra == 'all'", specifier = ">=2.0.0" },
-    { name = "torch", marker = "extra == 'embeddings'", specifier = ">=2.0.0" },
+    { name = "torch", marker = "extra == 'local-embeddings'", specifier = ">=2.0.0" },
     { name = "uvicorn", extras = ["standard"], specifier = ">=0.24.0" },
     { name = "vadersentiment", specifier = ">=3.3.2" },
 ]

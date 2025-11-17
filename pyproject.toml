@@ -22,7 +22,6 @@ dependencies = [
     "pytest>=7.4.0",
     "pytest-asyncio>=0.21.0",
     "pytest-cov>=4.1.0",
-    "sentence-transformers>=5.1.2",
     "fastapi>=0.104.0",
     "uvicorn[standard]>=0.24.0",
     "sse-starlette>=1.6.0",
@@ -31,17 +30,15 @@ dependencies = [
 ]
 
 [project.optional-dependencies]
-# Enhanced memory/RAG with better embeddings
-embeddings = [
-    "sentence-transformers>=2.2.0",
+# Legacy local embeddings support (not recommended for CPU-only servers)
+# Use remote embeddings via OPENROUTER_API_KEY instead
+local-embeddings = [
+    "sentence-transformers>=5.1.2",
     "torch>=2.0.0",
 ]
 
-# Full installation with all features
-all = [
-    "sentence-transformers>=2.2.0",
-    "torch>=2.0.0",
-]
+# Full installation with all features (deprecated - use remote embeddings)
+all = []
 
 [tool.ruff]
 line-length = 100

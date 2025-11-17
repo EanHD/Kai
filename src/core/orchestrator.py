@@ -14,6 +14,7 @@ from src.core.presenters.granite_presenter import GranitePresenter
 from src.core.query_analyzer import QueryAnalyzer
 from src.core.sanity_checker import SanityChecker
 from src.core.specialists.verification import SpecialistVerifier
+from src.embeddings.factory import get_shared_embeddings_provider
 from src.models.conversation import ConversationSession
 from src.models.response import Response
 from src.tools.base_tool import BaseTool
@@ -47,9 +48,12 @@ class Orchestrator:
         self.cost_tracker = CostTracker(cost_limit, soft_cap_threshold)
         self.conversation_service = None  # Will be injected by CLI/API
 
+        # Initialize embeddings provider
+        self.embeddings_provider = get_shared_embeddings_provider()
+
         # Core orchestration components
         # QueryAnalyzer for complexity detection (used for smart routing)
-        self.query_analyzer = QueryAnalyzer()
+        self.query_analyzer = QueryAnalyzer(embeddings_provider=self.embeddings_provider)
 
         # Use external model (Grok) for planning if available, fallback to local
         planner_connector = None
@@ -63,7 +67,9 @@ class Orchestrator:
             planner_connector = self.local_connector
             logger.info("Using local model for planning (no external planner available)")
 
-        self.plan_analyzer = PlanAnalyzer(planner_connector, orchestrator=self)
+        self.plan_analyzer = PlanAnalyzer(
+            planner_connector, orchestrator=self, embeddings_provider=self.embeddings_provider
+        )
         self.sanity_checker = SanityChecker()
 
         # Auto-detect specialist connectors

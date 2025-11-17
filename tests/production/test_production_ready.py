@@ -137,6 +137,7 @@ async def production_orchestrator(test_config):
         config=memory_config,
         vector_store=vector_store,
         encryption_key="production-test-key-32-bytes!",
+        embeddings_provider=None,
     )
 
     # Sentiment

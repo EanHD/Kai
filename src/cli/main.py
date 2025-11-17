@@ -29,6 +29,7 @@ from src.core.conversation_service import ConversationService
 from src.core.orchestrator import Orchestrator
 from src.core.providers.ollama_provider import OllamaProvider
 from src.core.providers.openrouter_provider import OpenRouterProvider
+from src.embeddings.factory import get_shared_embeddings_provider
 from src.lib.config import ConfigLoader
 from src.lib.logger import setup_logging
 from src.models.conversation import ConversationSession
@@ -84,6 +85,14 @@ class CLI:
         self.local_connector = None
         self.external_connectors = {}
         self._init_connectors()
+
+        # Initialize embeddings provider (shared across tools)
+        self.embeddings_provider = get_shared_embeddings_provider()
+        if self.debug:
+            if self.embeddings_provider:
+                logger.info("Embeddings provider initialized")
+            else:
+                logger.info("Embeddings disabled - set OPENROUTER_API_KEY to enable")
 
         # Initialize tools
         self.tools = self._init_tools()
@@ -249,6 +258,7 @@ class CLI:
                     config=memory_config,
                     vector_store=self.vector_store,
                     encryption_key=encryption_key,
+                    embeddings_provider=self.embeddings_provider,
                 )
                 if self.debug:
                     logger.info("MemoryStoreTool initialized successfully")

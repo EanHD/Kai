@@ -113,6 +113,7 @@ async def full_orchestrator(test_config):
         config=memory_config,
         vector_store=vector_store,
         encryption_key="test-encryption-key-32-bytes!!",
+        embeddings_provider=None,
     )
 
     # Sentiment

@@ -315,15 +315,21 @@ REMEMBER: You are a PLANNER not a CALCULATOR. Extract numbers, identify the task
 class PlanAnalyzer:
     """Generates structured execution plans from queries."""
 
-    def __init__(self, local_connector: LLMConnector, orchestrator: "Orchestrator | None" = None):
+    def __init__(
+        self,
+        local_connector: LLMConnector,
+        orchestrator: "Orchestrator | None" = None,
+        embeddings_provider=None,
+    ):
         """Initialize plan analyzer.
 
         Args:
             local_connector: LLM connector for Granite
             orchestrator: Optional reference to orchestrator for offline mode check
+            embeddings_provider: Optional embeddings provider for QueryAnalyzer
         """
         self.connector = local_connector
-        self.query_analyzer = QueryAnalyzer()
+        self.query_analyzer = QueryAnalyzer(embeddings_provider=embeddings_provider)
         self.orchestrator = orchestrator
 
     async def analyze(

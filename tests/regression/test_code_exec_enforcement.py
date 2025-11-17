@@ -207,7 +207,7 @@ class TestFallbackPlanBatteryDetection:
         """Fallback plan should detect battery pattern 14S5P."""
         query = "14S5P battery pack energy"
 
-        analyzer = PlanAnalyzer(local_connector=None)
+        analyzer = PlanAnalyzer(local_connector=None, embeddings_provider=None)
         plan = analyzer._create_fallback_plan(query, source="cli")
 
         # Should have code_exec step
@@ -222,7 +222,7 @@ class TestFallbackPlanBatteryDetection:
         """Fallback plan should detect battery pattern 13s4p."""
         query = "what's the capacity of a 13s4p pack?"
 
-        analyzer = PlanAnalyzer(local_connector=None)
+        analyzer = PlanAnalyzer(local_connector=None, embeddings_provider=None)
         plan = analyzer._create_fallback_plan(query, source="cli")
 
         code_exec_steps = [s for s in plan.steps if s.tool == "code_exec"]
@@ -233,7 +233,7 @@ class TestFallbackPlanBatteryDetection:
         """Fallback plan should detect battery pattern with spaces (14S 5P)."""
         query = "14S 5P battery configuration"
 
-        analyzer = PlanAnalyzer(local_connector=None)
+        analyzer = PlanAnalyzer(local_connector=None, embeddings_provider=None)
         plan = analyzer._create_fallback_plan(query, source="cli")
 
         code_exec_steps = [s for s in plan.steps if s.tool == "code_exec"]
@@ -244,7 +244,7 @@ class TestFallbackPlanBatteryDetection:
         """Fallback plan should use generic_math for non-battery calculations."""
         query = "calculate 50 + 30"
 
-        analyzer = PlanAnalyzer(local_connector=None)
+        analyzer = PlanAnalyzer(local_connector=None, embeddings_provider=None)
         plan = analyzer._create_fallback_plan(query, source="cli")
 
         code_exec_steps = [s for s in plan.steps if s.tool == "code_exec"]
@@ -259,7 +259,7 @@ class TestBatteryNotationVariations:
         """Test 14S5P uppercase notation."""
         query = "14S5P pack with 3500mAh cells"
 
-        analyzer = PlanAnalyzer(local_connector=None)
+        analyzer = PlanAnalyzer(local_connector=None, embeddings_provider=None)
         plan = analyzer._create_fallback_plan(query, source="cli")
 
         code_exec_steps = [s for s in plan.steps if s.tool == "code_exec"]
@@ -271,7 +271,7 @@ class TestBatteryNotationVariations:
         """Test 14s5p lowercase notation."""
         query = "14s5p pack with 3500mAh cells"
 
-        analyzer = PlanAnalyzer(local_connector=None)
+        analyzer = PlanAnalyzer(local_connector=None, embeddings_provider=None)
         plan = analyzer._create_fallback_plan(query, source="cli")
 
         code_exec_steps = [s for s in plan.steps if s.tool == "code_exec"]
@@ -282,7 +282,7 @@ class TestBatteryNotationVariations:
         """Test 14S 5P with spaces."""
         query = "14S 5P battery configuration"
 
-        analyzer = PlanAnalyzer(local_connector=None)
+        analyzer = PlanAnalyzer(local_connector=None, embeddings_provider=None)
         plan = analyzer._create_fallback_plan(query, source="cli")
 
         code_exec_steps = [s for s in plan.steps if s.tool == "code_exec"]
@@ -293,7 +293,7 @@ class TestBatteryNotationVariations:
         """Test 14s5P mixed case notation."""
         query = "energy of 14s5P pack"
 
-        analyzer = PlanAnalyzer(local_connector=None)
+        analyzer = PlanAnalyzer(local_connector=None, embeddings_provider=None)
         plan = analyzer._create_fallback_plan(query, source="cli")
 
         code_exec_steps = [s for s in plan.steps if s.tool == "code_exec"]
@@ -304,7 +304,7 @@ class TestBatteryNotationVariations:
         """Test 14S5P notation embedded in complex query."""
         query = "If I build a 14S5P pack with NCR18650B cells at 3500mAh, what's the total energy?"
 
-        analyzer = PlanAnalyzer(local_connector=None)
+        analyzer = PlanAnalyzer(local_connector=None, embeddings_provider=None)
         plan = analyzer._create_fallback_plan(query, source="cli")
 
         code_exec_steps = [s for s in plan.steps if s.tool == "code_exec"]

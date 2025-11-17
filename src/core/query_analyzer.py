@@ -2,7 +2,7 @@
 
 import logging
 import re
-from typing import Any
+from typing import Any, Optional
 
 import numpy as np
 
@@ -12,25 +12,17 @@ logger = logging.getLogger(__name__)
 class QueryAnalyzer:
     """Analyzes queries to determine complexity and required capabilities."""
 
-    def __init__(self):
-        """Initialize query analyzer with optional embedding model for topic detection."""
-        self.embedding_model = None
-        self._init_embedding_model()
+    def __init__(self, embeddings_provider=None):
+        """Initialize query analyzer with optional embeddings provider for topic detection.
 
-    def _init_embedding_model(self):
-        """Initialize sentence transformer for topic shift detection."""
-        try:
-            from sentence_transformers import SentenceTransformer
-
-            model_name = "sentence-transformers/all-MiniLM-L6-v2"
-            self.embedding_model = SentenceTransformer(model_name)
-            logger.debug(f"Loaded embedding model for topic detection: {model_name}")
-        except (ImportError, OSError, RuntimeError) as e:
-            # ImportError: library not installed
-            # OSError: binary incompatibility (e.g., AVX instruction mismatch)
-            # RuntimeError: model loading failures
-            logger.warning(f"Embedding model unavailable, topic shift detection disabled: {e}")
-            self.embedding_model = None
+        Args:
+            embeddings_provider: Optional EmbeddingsProvider instance for semantic analysis
+        """
+        self.embeddings_provider = embeddings_provider
+        if self.embeddings_provider:
+            logger.debug("QueryAnalyzer initialized with embeddings provider")
+        else:
+            logger.debug("QueryAnalyzer initialized without embeddings (topic shift detection disabled)")
 
     # Keywords for different query types
     WEB_SEARCH_KEYWORDS = [
@@ -256,9 +248,9 @@ class QueryAnalyzer:
     def detect_topic_shift(
         self,
         current_query: str,
-        previous_topic_embedding: list[float] | None = None,
+        previous_topic_embedding: Optional[list[float]] = None,
         similarity_threshold: float = 0.5,
-    ) -> tuple[bool, list[float] | None]:
+    ) -> tuple[bool, Optional[list[float]]]:
         """Detect if query represents a topic shift from previous conversation.
 
         Uses semantic similarity between current query and previous topic embedding.
@@ -272,8 +264,8 @@ class QueryAnalyzer:
         Returns:
             Tuple of (is_topic_shift, current_query_embedding)
         """
-        if not self.embedding_model or not previous_topic_embedding:
-            # No model or no previous topic - can't detect shift
+        if not self.embeddings_provider or not previous_topic_embedding:
+            # No provider or no previous topic - can't detect shift
             current_embedding = self._generate_embedding(current_query)
             return False, current_embedding
 
@@ -313,21 +305,21 @@ class QueryAnalyzer:
             logger.error(f"Error calculating similarity: {e}")
             return False, current_embedding
 
-    def _generate_embedding(self, text: str) -> list[float] | None:
-        """Generate embedding for text.
+    def _generate_embedding(self, text: str) -> Optional[list[float]]:
+        """Generate embedding for text using the configured provider.
 
         Args:
             text: Text to embed
 
         Returns:
-            Embedding vector or None if model unavailable
+            Embedding vector or None if provider unavailable
         """
-        if not self.embedding_model:
+        if not self.embeddings_provider:
             return None
 
         try:
-            embedding = self.embedding_model.encode(text)
-            return embedding.tolist()
+            embeddings = self.embeddings_provider.embed([text])
+            return embeddings[0] if embeddings else None
         except Exception as e:
             logger.error(f"Failed to generate embedding: {e}")
             return None
@@ -352,7 +344,7 @@ class QueryAnalyzer:
         return float(dot_product / (norm1 * norm2))
 
     def analyze(
-        self, query_text: str, previous_topic_embedding: list[float] | None = None
+        self, query_text: str, previous_topic_embedding: Optional[list[float]] = None
     ) -> dict[str, Any]:
         """Analyze query for complexity, capabilities, and topic shifts.
 
