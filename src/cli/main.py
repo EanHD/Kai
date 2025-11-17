@@ -511,36 +511,34 @@ class CLI:
                         print(f"   {i}. {citation.title}")
                         print(f"      {citation.url}")
 
-                print()
-
                 # Check cost warnings from orchestrator cost tracker
                 cost_summary = self.orchestrator.get_cost_summary(self.conversation.session_id)
 
                 if cost_summary["soft_cap_reached"]:
                     print(
-                        f"⚠️  Soft cap reached! "
+                        f"\n⚠️  Soft cap reached! "
                         f"(${cost_summary['total_cost']:.4f}/"
                         f"${cost_summary['limit']:.2f}) "
                         f"- Using local models to save costs"
                     )
-                    print()
                 elif cost_summary["hard_cap_reached"]:
                     print(
-                        f"🛑 Hard cap reached! "
+                        f"\n🛑 Hard cap reached! "
                         f"(${cost_summary['total_cost']:.4f}/"
                         f"${cost_summary['limit']:.2f}) "
                         f"- Only local models available"
                     )
-                    print()
                 elif self.conversation.approaching_limit():
                     remaining_pct = (cost_summary["remaining"] / cost_summary["limit"]) * 100
                     print(
-                        f"⚠️  Approaching cost limit: "
+                        f"\n⚠️  Approaching cost limit: "
                         f"${cost_summary['total_cost']:.4f}/"
                         f"${cost_summary['limit']:.2f} "
                         f"({remaining_pct:.0f}% remaining)"
                     )
-                    print()
+
+                # Add blank line before next prompt
+                print()
 
             except KeyboardInterrupt:
                 print("\n\n👋 Goodbye!")
