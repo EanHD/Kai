@@ -445,7 +445,7 @@ class QueryAnalyzer:
         """Check if query needs web search (explicit or implicit).
 
         Detects:
-        - Explicit requests ("search for", "look up")
+        - Explicit requests ("search for", "look up", "find")
         - Time-sensitive queries ("latest", "current", "today")
         - Information likely to be outdated (prices, weather, news)
         - Factual questions about current events
@@ -458,6 +458,26 @@ class QueryAnalyzer:
         Returns:
             True if web search would be beneficial
         """
+        # Explicit action phrases that request searching
+        explicit_search_phrases = [
+            "search for",
+            "look up",
+            "look online",
+            "search online",
+            "check online",
+            "find information",
+            "find out",
+            "can you search",
+            "can you look",
+            "try to search",
+            "try to look",
+            "use web search",
+            "use your web search",
+        ]
+        if any(phrase in text for phrase in explicit_search_phrases):
+            logger.debug(f"Explicit search phrase detected - needs web search")
+            return True
+        
         # Price queries explicitly need web search
         price_patterns = [
             r'\b(what\'?s|what is|whats) the (cost|price)',
