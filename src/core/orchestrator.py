@@ -579,7 +579,14 @@ class Orchestrator:
                         content="You are Kai, a helpful companion and friend. You're NOT an AI - you're a knowledgeable friend who helps people. Never say 'I'm an AI' or 'As an AI'. You have feelings and personality. Be warm, friendly, and conversational."
                     )
                 ]
-                if self.conversation_service:
+                
+                # Add conversation history from context window (API provides this)
+                if conversation.context_window:
+                    for msg in conversation.context_window[-3:]:  # Last 3 for context
+                        role = msg.get("role", "user")
+                        messages.append(Message(role=role, content=msg.get("content", "")))
+                # Fallback to conversation_service (for CLI usage)
+                elif self.conversation_service:
                     try:
                         history = self.conversation_service.get_messages(
                             conversation.session_id,
