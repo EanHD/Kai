@@ -172,6 +172,8 @@ class Orchestrator:
             quick_analysis = self.query_analyzer.analyze(query_text)
             complexity_score = quick_analysis.get("complexity_score", 0.5)
             capabilities = quick_analysis.get("capabilities", [])
+            
+            logger.info(f"Query analysis: complexity={complexity_score:.2f}, capabilities={capabilities}")
 
             # Simple query fast path: no tools needed AND very low complexity
             if not capabilities and complexity_score < 0.2:
