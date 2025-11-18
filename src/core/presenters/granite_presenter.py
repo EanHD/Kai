@@ -105,7 +105,7 @@ class GranitePresenter:
             response = await self.connector.generate(
                 messages=messages,
                 temperature=0.3,  # Focused for concise output
-                max_tokens=500,  # Reduced for speed on Pentium G3258
+                max_tokens=2048,  # Allow longer formatted responses
             )
 
             # Log raw response for debugging
