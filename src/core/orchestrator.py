@@ -203,7 +203,7 @@ class Orchestrator:
                 response = await self.local_connector.generate(
                     messages=messages,
                     temperature=0.7,
-                    max_tokens=256,  # Reduced from 512 for faster response
+                    max_tokens=1024,  # Allow longer responses
                 )
 
                 elapsed = time.time() - start_time
@@ -590,7 +590,7 @@ class Orchestrator:
                 async for chunk in self.local_connector.generate_stream(
                     messages=messages,
                     temperature=0.7,
-                    max_tokens=256,
+                    max_tokens=1024,  # Allow longer responses
                 ):
                     yield chunk
 

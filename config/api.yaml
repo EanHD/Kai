@@ -1,14 +1,14 @@
 # API Server Configuration
 
 server:
-  host: "0.0.0.0"
+  host: "127.0.0.1"  # Only localhost (tunnel handles external access)
   port: 9000
   workers: 4
   reload: false  # Set true for development
   
-  # HTTPS/SSL Configuration (disabled for local dev - use http://)
+  # HTTPS/SSL Configuration (disabled - tunnel handles HTTPS)
   ssl:
-    enabled: false  # Set true to enable HTTPS
+    enabled: false  # Cloudflare/ngrok tunnel handles HTTPS
     certfile: "certs/cert.pem"  # Path to SSL certificate
     keyfile: "certs/key.pem"    # Path to SSL private key
     ca_certs: null  # Optional: Path to CA certificate bundle
@@ -46,6 +46,11 @@ model_mapping:
 
 # Default model when none specified
 default_model: granite-local
+
+# Response generation settings
+response:
+  max_tokens: 2048  # Maximum tokens for responses (increase for longer outputs)
+  fast_path_max_tokens: 1024  # Max tokens for simple queries (fast path)
 
 # CORS configuration
 cors:
