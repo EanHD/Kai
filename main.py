@@ -78,11 +78,32 @@ async def lifespan(app: FastAPI):
     if not local_connector:
         logger.error("No local connector initialized - API will not function properly")
 
+    # Initialize tools
+    tools = {}
+    enabled_tools = kai_config.get_enabled_tools()
+    
+    # Initialize web search tool
+    if "web_search" in enabled_tools:
+        try:
+            from src.tools.web_search import WebSearchTool
+            tool_config = enabled_tools["web_search"]
+            web_search_config = {
+                "max_results": tool_config.config.get("max_results", 10),
+                "timeout_seconds": tool_config.config.get("timeout_seconds", 15),
+                "max_days_old": tool_config.config.get("max_days_old", 30),
+                "api_key": kai_config.get_env("brave_api_key"),
+                "tavily_api_key": kai_config.get_env("tavily_api_key"),
+            }
+            tools["web_search"] = WebSearchTool(web_search_config)
+            logger.info("WebSearchTool initialized for API server")
+        except Exception as e:
+            logger.error(f"Failed to initialize WebSearchTool: {e}")
+    
     # Initialize orchestrator
     orchestrator = Orchestrator(
         local_connector=local_connector,
         external_connectors=external_connectors,
-        tools={},  # Tools can be added later
+        tools=tools,
         cost_limit=100.0,  # High limit for API usage
         soft_cap_threshold=0.8,
     )
