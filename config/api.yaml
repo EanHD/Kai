@@ -6,7 +6,7 @@ server:
   workers: 4
   reload: false  # Set true for development
   
-  # HTTPS/SSL Configuration
+  # HTTPS/SSL Configuration (disabled for local dev - use http://)
   ssl:
     enabled: false  # Set true to enable HTTPS
     certfile: "certs/cert.pem"  # Path to SSL certificate
