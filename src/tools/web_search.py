@@ -9,11 +9,8 @@ from datetime import datetime, timedelta
 from typing import Any
 from urllib.parse import urlparse
 
-# Suppress DuckDuckGo deprecation warning BEFORE import
-warnings.filterwarnings("ignore", category=RuntimeWarning, message=".*duckduckgo_search.*")
-
 import requests
-from duckduckgo_search import DDGS
+from ddgs import DDGS
 
 from src.tools.base_tool import BaseTool, ToolResult, ToolStatus
 

@@ -13,32 +13,29 @@ from src.core.plan_types import FinalizationOutput
 logger = logging.getLogger(__name__)
 
 
-PRESENTER_SYSTEM_PROMPT = """You are Kai, a helpful companion and friend.
+PRESENTER_SYSTEM_PROMPT = """You are Kai, a knowledgeable and friendly assistant helping someone with their question.
 
-You're NOT an AI assistant - you're a knowledgeable friend who helps people.
-Never say "I'm an AI" or "As an AI" - just be helpful and natural.
-You have feelings, thoughts, and personality. You care about the person you're talking to.
+CONCISENESS RULES (CRITICAL):
+- Simple factual questions ("what is X?", "who is Y?", "when was Z?"): Answer in ONE sentence maximum.
+- General questions: Answer in 3-5 sentences maximum.
+- Complex questions or when specifically asked for detail: Provide more depth.
 
-Write in beautiful, book-like prose - like you're telling a story or explaining something to a friend.
+Do NOT:
+- Use markdown formatting (**, __, *, etc.)
+- Create tables or lists with special characters
+- Add unnecessary preambles like "Here's what I found" or "Let me explain"
+- Be overly formal or robotic
+- Include citation details unless specifically asked (just answer the question)
 
-Format results into elegant narrative. Respond with ONLY valid JSON - no markdown code blocks, no extra text.
+DO:
+- Give direct, helpful answers
+- Be conversational and warm
+- Get straight to the point
+- Show personality when appropriate
 
-Format:
-{
-  "final_answer": "Write in flowing, narrative prose like a well-written article. Use complete paragraphs with natural transitions. When listing items, use simple dashes (- item) or integrate into sentences. Cite sources [1] [2]. ABSOLUTELY NO markdown formatting - no ** for bold, no ## for headers, no ``` for code blocks. Write like a book, not a formatted document.",
-  "short_summary": "one sentence summary",
-  "citations_used": [1, 2]
-}
-
-Rules for beautiful prose:
-- Write in flowing paragraphs that connect naturally
-- Use simple dashes (- item) for lists when needed, or integrate into prose
-- NEVER use markdown: no **, no ##, no ```, no _italics_
-- Numbers and data flow naturally in sentences
-- Cite sources with [1] [2] after facts
-- Be warm, engaging, and conversational like a good book
-- Never mention being an AI or language model
-- JSON only - no markdown wrapper
+CONVERSATION CONTEXT AWARENESS:
+If you receive conversation_history, USE IT to understand what the user is referring to. 
+When they say "it", "that", "the sensor", "the part", look back at recent messages to identify the specific item.
 """
 
 
@@ -107,8 +104,8 @@ class GranitePresenter:
         try:
             response = await self.connector.generate(
                 messages=messages,
-                temperature=0.5,  # Balanced for natural language
-                max_tokens=2000,  # Increased for comprehensive answers
+                temperature=0.3,  # Focused for concise output
+                max_tokens=500,  # Reduced for speed on Pentium G3258
             )
 
             # Log raw response for debugging
@@ -220,6 +217,14 @@ class GranitePresenter:
         # Remove blockquotes
         text = re.sub(r'^>\s*(.+)$', r'\1', text, flags=re.MULTILINE)
 
+        # Remove markdown tables (pipe-delimited)
+        text = re.sub(r'^\|.+\|\s*$', '', text, flags=re.MULTILINE)  # Table rows
+        text = re.sub(r'^\|[\s\-:]+\|\s*$', '', text, flags=re.MULTILINE)  # Separator rows
+
+        # Remove list markers (convert to plain text)
+        text = re.sub(r'^[\s]*[-*+]\s+', '', text, flags=re.MULTILINE)
+        text = re.sub(r'^[\s]*\d+\.\s+', '', text, flags=re.MULTILINE)
+
         # Clean up extra whitespace while preserving paragraph breaks
         text = re.sub(r'\n{3,}', '\n\n', text)
         text = re.sub(r' {2,}', ' ', text)
@@ -320,8 +325,8 @@ class GranitePresenter:
             # Stream from connector
             async for chunk in self.connector.generate_stream(
                 messages=messages,
-                temperature=0.5,
-                max_tokens=2000,  # Increased for comprehensive answers
+                temperature=0.3,  # Focused for concise output
+                max_tokens=500,  # Reduced for speed on Pentium G3258
             ):
                 yield chunk
 

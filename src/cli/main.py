@@ -110,6 +110,9 @@ class CLI:
             soft_cap_threshold=soft_cap_threshold,
         )
 
+        # CRITICAL: Inject conversation service for context retention in fast path
+        self.orchestrator.conversation_service = self.conversation_service
+
         # Initialize reflection agent (always enabled for continuous learning)
         self.reflection_agent = None
         if self.local_connector:

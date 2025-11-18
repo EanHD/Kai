@@ -308,6 +308,53 @@ Guidelines:
 - Mark dependencies clearly in depends_on
 - If query asks to "show work" or "verify": set safety_level to "high"
 
+CRITICAL: FOLLOW-UP QUERY EXPANSION
+When user says "it", "that", "the sensor", "the part", or asks a follow-up question, you MUST extract the full context from conversation_history and expand the search query.
+
+Example 1:
+User turn 1: "I need a front O2 sensor for my 2007 Chevy Aveo"
+User turn 2: "can you look online for me?"
+
+Your web_search step MUST expand to:
+{
+  "input": {
+    "query": "front O2 sensor 2007 Chevy Aveo price buy online"
+  }
+}
+
+NOT: {"query": "look online"} ← WRONG! Missing context!
+
+Example 2:
+User turn 1: "I need a front O2 sensor for my 2007 Chevy Aveo"
+User turn 2: "look for the o2 sensor and let me know the price"
+
+Your web_search step MUST be:
+{
+  "input": {
+    "query": "2007 Chevy Aveo front O2 sensor price where to buy"
+  }
+}
+
+NOT: {"query": "o2 sensor price"} ← WRONG! Missing vehicle details!
+
+Example 3:
+User turn 1: "Compare RTX 4090 vs RTX 4080"
+User turn 2: "which one is better for gaming?"
+
+Your web_search step MUST be:
+{
+  "input": {
+    "query": "RTX 4090 vs RTX 4080 gaming performance comparison benchmarks"
+  }
+}
+
+Always include:
+- Specific product/part names from earlier messages
+- Model numbers, years, specifications mentioned
+- The actual question being asked (price, availability, comparison, etc.)
+
+Do NOT create vague queries when conversation_history has specific details!
+
 REMEMBER: You are a PLANNER not a CALCULATOR. Extract numbers, identify the task, fill variables, let Python do the math.
 """
 
@@ -354,7 +401,7 @@ class PlanAnalyzer:
                 context_str = "\n\nRecent conversation:\n"
                 for msg in history[-3:]:  # Last 3 messages
                     role = msg.get("role", "unknown")
-                    content = msg.get("content", "")[:200]  # Limit length
+                    content = msg.get("content", "")  # Full content, no truncation
                     context_str += f"{role}: {content}\n"
                 user_content = context_str + f"\nCurrent query: {query_text}"
                 logger.info(

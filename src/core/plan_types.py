@@ -290,3 +290,4 @@ class FinalizationOutput:
     short_summary: str
     citations_used: list[int] = field(default_factory=list)
     debug_info: dict[str, Any] = field(default_factory=dict)
+    confidence: str = "medium"  # "high" | "medium" | "low" - based on source count and tool success

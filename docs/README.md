@@ -15,6 +15,7 @@ Essential documentation for using and understanding Kai.
 ## Reference
 
 - **[API Documentation](api.md)** - OpenAI-compatible API reference
+- **[HTTPS/SSL Configuration](HTTPS.md)** - Enable secure HTTPS endpoints
 - **[Troubleshooting](troubleshooting.md)** - Common issues and solutions
 - **[Deployment](deployment.md)** - Production deployment guide
 
@@ -26,6 +27,7 @@ Essential documentation for using and understanding Kai.
 | Change models | [Configuration > Models](CONFIGURATION.md#model-configuration) |
 | Enable/disable tools | [Configuration > Tools](CONFIGURATION.md#tool-configuration) |
 | API integration | [API Docs](api.md) |
+| Enable HTTPS | [HTTPS Configuration](HTTPS.md) |
 | It's not working | [Troubleshooting](troubleshooting.md) |
 | Deploy to production | [Deployment](deployment.md) |
 | How learning works | [Self-Improvement Loop](SELF_IMPROVEMENT_LOOP.md) |

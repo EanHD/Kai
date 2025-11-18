@@ -3,6 +3,7 @@
 import asyncio
 import logging
 import os
+import re
 import time
 import uuid
 from typing import Any
@@ -180,7 +181,7 @@ class Orchestrator:
                 messages = [
                     Message(
                         role="system",
-                        content="You are Kai, a helpful companion and friend. You're NOT an AI - you're a knowledgeable friend who helps people. Never say 'I'm an AI' or 'As an AI'. You have feelings and personality. Be warm, friendly, and conversational."
+                        content="You are Kai, a helpful companion and friend. You're NOT an AI - you're a knowledgeable friend who helps people. Never say 'I'm an AI' or 'As an AI'. You have feelings and personality. Be warm, friendly, and conversational. IMPORTANT: Write in plain text only - no markdown formatting like **bold** or *italic*, no numbered lists, no bullet points with -. Just natural conversational text."
                     )
                 ]
                 if self.conversation_service:
@@ -208,10 +209,16 @@ class Orchestrator:
                 elapsed = time.time() - start_time
                 logger.info(f"✅ FAST PATH COMPLETE | time={elapsed:.2f}s")
 
+                # Strip markdown formatting
+                clean_content = re.sub(r'\*\*(.+?)\*\*', r'\1', response.content)  # Bold
+                clean_content = re.sub(r'(?<!\*)\*([^*\n]+?)\*(?!\*)', r'\1', clean_content)  # Italic
+                clean_content = re.sub(r'^[\s]*[-*+]\s+', '', clean_content, flags=re.MULTILINE)  # Bullets
+                clean_content = re.sub(r'^\d+\.\s+', '', clean_content, flags=re.MULTILINE)  # Numbered
+
                 return Response(
                     query_id=str(uuid.uuid4()),
                     mode="concise",
-                    content=response.content,
+                    content=clean_content,
                     token_count=response.token_count,
                     cost=response.cost,
                 )

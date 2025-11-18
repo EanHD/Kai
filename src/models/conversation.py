@@ -55,6 +55,48 @@ class ConversationSession:
     active_tools: list[str] = field(default_factory=list)
     context_window: list[dict[str, Any]] = field(default_factory=list)
     current_topic_embedding: list[float] | None = None  # For topic shift detection
+    tool_results_cache: dict[str, dict[str, Any]] = field(default_factory=dict)  # Cache last N tool results
+
+    def cache_tool_result(self, turn_id: str, tool_name: str, result: Any) -> None:
+        """Cache tool result for potential reuse in follow-up queries.
+
+        Args:
+            turn_id: Unique ID for this conversation turn
+            tool_name: Name of tool that produced result
+            result: Tool execution result
+        """
+        if turn_id not in self.tool_results_cache:
+            self.tool_results_cache[turn_id] = {}
+        self.tool_results_cache[turn_id][tool_name] = result
+
+        # Keep only last 5 turns to prevent memory bloat
+        if len(self.tool_results_cache) > 5:
+            oldest = min(self.tool_results_cache.keys())
+            del self.tool_results_cache[oldest]
+            logger.debug(f"Removed oldest tool results from cache: {oldest}")
+
+    def get_recent_tool_results(self, tool_name: str | None = None, limit: int = 5) -> list[Any]:
+        """Get cached tool results from recent turns.
+
+        Args:
+            tool_name: Optional filter for specific tool (e.g., "web_search")
+            limit: Maximum number of results to return
+
+        Returns:
+            List of cached tool results, most recent first
+        """
+        results = []
+        # Iterate in reverse chronological order (newest first)
+        for turn_id in sorted(self.tool_results_cache.keys(), reverse=True):
+            turn_results = self.tool_results_cache[turn_id]
+            if tool_name:
+                if tool_name in turn_results:
+                    results.append(turn_results[tool_name])
+            else:
+                results.extend(turn_results.values())
+            if len(results) >= limit:
+                break
+        return results[:limit]
 
     def add_cost(self, cost: float) -> None:
         """Add cost to session total.

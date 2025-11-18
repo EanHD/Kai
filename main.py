@@ -344,12 +344,31 @@ if __name__ == "__main__":
     import uvicorn
 
     server_config = config.get("server", {})
+    ssl_config = server_config.get("ssl", {})
 
-    uvicorn.run(
-        "main:app",
-        host=server_config.get("host", "0.0.0.0"),
-        port=server_config.get("port", 9000),
-        reload=server_config.get("reload", False),
-        workers=1 if server_config.get("reload", False) else server_config.get("workers", 4),
-        log_level=config.get("logging.level", "info").lower(),
-    )
+    # Build uvicorn kwargs
+    uvicorn_kwargs = {
+        "app": "main:app",
+        "host": server_config.get("host", "0.0.0.0"),
+        "port": server_config.get("port", 9000),
+        "reload": server_config.get("reload", False),
+        "workers": 1 if server_config.get("reload", False) else server_config.get("workers", 4),
+        "log_level": config.get("logging.level", "info").lower(),
+    }
+
+    # Add SSL configuration if enabled
+    if ssl_config.get("enabled", False):
+        ssl_certfile = ssl_config.get("certfile")
+        ssl_keyfile = ssl_config.get("keyfile")
+        ssl_ca_certs = ssl_config.get("ca_certs")
+
+        if ssl_certfile and ssl_keyfile:
+            uvicorn_kwargs["ssl_certfile"] = ssl_certfile
+            uvicorn_kwargs["ssl_keyfile"] = ssl_keyfile
+            if ssl_ca_certs:
+                uvicorn_kwargs["ssl_ca_certs"] = ssl_ca_certs
+            logger.info(f"🔒 HTTPS enabled with certificate: {ssl_certfile}")
+        else:
+            logger.warning("⚠️  SSL enabled but certfile/keyfile not configured - falling back to HTTP")
+
+    uvicorn.run(**uvicorn_kwargs)

@@ -5,6 +5,15 @@ server:
   port: 9000
   workers: 4
   reload: false  # Set true for development
+  
+  # HTTPS/SSL Configuration
+  ssl:
+    enabled: false  # Set true to enable HTTPS
+    certfile: "certs/cert.pem"  # Path to SSL certificate
+    keyfile: "certs/key.pem"    # Path to SSL private key
+    ca_certs: null  # Optional: Path to CA certificate bundle
+    # For self-signed certs in development:
+    # Generate with: openssl req -x509 -newkey rsa:4096 -nodes -out cert.pem -keyout key.pem -days 365
 
 # Authentication settings
 auth:

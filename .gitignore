@@ -98,3 +98,9 @@ playground/
 .pytest_cache/
 htmlcov/
 .coverage
+
+# SSL/TLS certificates
+certs/
+*.pem
+*.key
+*.crt

@@ -35,7 +35,17 @@ class QueryAnalyzer:
         "what's the",
         "search for",
         "find information",
+        "find",  # "find a sensor", "find me"
         "look up",
+        "look online",  # "can you look online"
+        "look for",  # "look for the part"
+        "search online",
+        "check online",  # "check online for me"
+        "check",  # "check prices"
+        "show me",  # "show me options"
+        "get me",  # "get me prices"
+        "where can i find",
+        "where to buy",
         "update",
         "happening",
         "status",
@@ -48,6 +58,8 @@ class QueryAnalyzer:
         "which",  # "which graphics card" etc
         "should i buy",  # Shopping advice
         "worth it",  # Product value questions
+        "available",  # "what's available"
+        "in stock",  # "is it in stock"
     ]
 
     # Implicit web search indicators (things that change frequently)
@@ -446,6 +458,19 @@ class QueryAnalyzer:
         Returns:
             True if web search would be beneficial
         """
+        # Price queries explicitly need web search
+        price_patterns = [
+            r'\b(what\'?s|what is|whats) the (cost|price)',
+            r'\bhow much (does|will|is|are|do)',
+            r'\blet me know.*\b(price|cost)',
+            r'\btell me.*\b(price|cost)',
+            r'\bprice for',
+            r'\bcost (of|for)',
+        ]
+        if any(re.search(pattern, text) for pattern in price_patterns):
+            logger.debug("Price query detected - needs web search")
+            return True
+        
         # Date/time queries should use code_exec, not web_search
         if any(re.search(pattern, text) for pattern in self.DATE_TIME_PATTERNS):
             logger.debug("Date/time query detected - will use code_exec, not web_search")
@@ -477,6 +502,16 @@ class QueryAnalyzer:
         if re.search(r"\b(202[4-9]|20[3-9]\d)\b", text):  # Recent years
             return True
 
+        # Simple factual questions that don't need web search (well-known facts)
+        simple_factual_patterns = [
+            r"\bwhat is the (capital|president|currency|population) of\b",
+            r"\bwho is the (president|king|queen|leader|ceo) of\b",
+            r"\bwhen (is|was) .{0,30}(born|founded|created|invented)\b",
+        ]
+        if any(re.search(pattern, text) for pattern in simple_factual_patterns):
+            logger.debug("Simple factual query - using fast path, no web search")
+            return False
+
         # Factual "who/what/where/when" questions (likely need verification)
         factual_patterns = [
             r"\bwho is\b",
@@ -502,6 +537,51 @@ class QueryAnalyzer:
         Returns:
             True if code execution needed
         """
+        # Exclude memory/conversation queries that aren't calculations
+        memory_query_patterns = [
+            r'\b(do you |did you )?(remember|recall)\b',
+            r'\bwhat (did|were) (we|i|you)',
+            r'\b(our|the) (conversation|discussion|chat)',
+        ]
+        if any(re.search(pattern, text) for pattern in memory_query_patterns):
+            # Unless there are explicit numbers/calculations
+            if not re.search(r'\d+\s*[\+\-\*\/x×÷]\s*\d+', text):
+                logger.debug("Memory query detected - NOT using code_exec")
+                return False
+        
+        # Exclude information/listing queries that aren't calculations
+        info_query_patterns = [
+            r'\b(what|which|list|show|tell me about)\s+(are|is)?\s+(the\s+)?(latest|newest|current|best|top)',
+            r'\b(latest|newest|current)\s+(ai|models?|llm|news|update)',
+        ]
+        if any(re.search(pattern, text) for pattern in info_query_patterns):
+            logger.debug("Information query detected - NOT using code_exec")
+            return False
+        
+        # Exclude workout/exercise/fitness queries (not calculations)
+        workout_patterns = [
+            r'\b(workout|exercise|train|fitness|gym)\b',
+            r'\b(muscle|chest|back|legs|arms|abs|shoulders|bicep|tricep)\b',
+            r'\b(cardio|strength|endurance|flexibility)\b',
+        ]
+        if any(re.search(pattern, text) for pattern in workout_patterns):
+            # Unless there are explicit calculations
+            if not re.search(r'\d+\s*[\+\-\*\/x×÷]\s*\d+', text):
+                logger.debug("Workout/fitness query detected - NOT using code_exec")
+                return False
+        
+        # Exclude workout/exercise/fitness queries (not calculations)
+        workout_patterns = [
+            r'\b(workout|exercise|train|fitness|gym)\b',
+            r'\b(muscle|chest|back|legs|arms|abs)\b',
+            r'\b(cardio|strength|endurance|flexibility)\b',
+        ]
+        if any(re.search(pattern, text) for pattern in workout_patterns):
+            # Unless there are explicit calculations
+            if not re.search(r'\d+\s*[\+\-\*\/x×÷]\s*\d+', text):
+                logger.debug("Workout/fitness query detected - NOT using code_exec")
+                return False
+
         # Date/time queries should use code_exec to get current date/time
         if any(re.search(pattern, text) for pattern in self.DATE_TIME_PATTERNS):
             logger.debug("Date/time query detected - will use code_exec")
