@@ -173,13 +173,12 @@ async def process_chat_completion_stream(
 
             chunk_obj = ChatCompletionChunk(**openai_chunk)
 
-            # Format as SSE
-
+            # Yield just the JSON - EventSourceResponse will add "data: " prefix
             chunk_json = chunk_obj.model_dump_json(exclude_none=True)
-            yield f"data: {chunk_json}\n\n"
+            yield chunk_json
 
         # Send [DONE] marker
-        yield "data: [DONE]\n\n"
+        yield "[DONE]"
 
         logger.info(f"Streaming completed: request_id={request_id}")
 
