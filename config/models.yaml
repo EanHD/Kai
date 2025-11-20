@@ -28,8 +28,23 @@
 # - active: Set to false to disable without deleting config
 
 models:
-  # Local Model (Ollama) - Granite 4 Micro (Primary)
-  # Best for: Simple queries, casual conversation, quick facts
+  # Local Model (Ollama) - SmolLM2 1.7B (Primary)
+  # Best for: Fast narration, summarization, and simple queries on low-VRAM GPUs (GTX 1650)
+  - model_id: smollm2-1.7b
+    model_name: smollm2:1.7b  # Run: ollama pull smollm2:1.7b
+    provider: ollama
+    capabilities:
+      - chat
+      - function_calling
+    context_window: 8192  # Standard context
+    cost_per_1k_input: 0.0
+    cost_per_1k_output: 0.0
+    routing_priority: 10  # FREE - primary local model
+    is_local: true
+    active: true
+
+  # Local Model (Ollama) - Granite 4 Micro (Secondary)
+  # Best for: Slightly more complex local tasks if VRAM permits
   - model_id: granite4-micro
     model_name: granite4:micro-h  # Run: ollama pull granite4:micro-h
     provider: ollama
@@ -39,7 +54,7 @@ models:
     context_window: 2000000  # 2M tokens!
     cost_per_1k_input: 0.0
     cost_per_1k_output: 0.0
-    routing_priority: 10  # FREE - primary local model
+    routing_priority: 9  # FREE - secondary local model
     is_local: true
     active: true
 

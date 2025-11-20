@@ -23,6 +23,11 @@ auth:
 # Model name mapping: client request → backend provider
 model_mapping:
   # Local models (Ollama)
+  smollm-local:
+    provider: ollama
+    model: smollm2:1.7b
+    description: "Ultra-fast local model for narration and simple queries"
+
   granite-local:
     provider: ollama
     model: granite4:micro-h
@@ -45,7 +50,7 @@ model_mapping:
     description: "SOTA cost-efficiency with 2M context window"
 
 # Default model when none specified
-default_model: granite-local
+default_model: smollm-local
 
 # Response generation settings
 response:

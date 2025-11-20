@@ -70,7 +70,10 @@ if ! pgrep -x "ollama" > /dev/null; then
 fi
 
 # Pull Granite model (Local)
-echo "⬇️  Pulling granite4:micro-h (Local Model)..."
+echo "⬇️  Pulling smollm2:1.7b (Primary Local Model)..."
+ollama pull smollm2:1.7b
+
+echo "⬇️  Pulling granite4:micro-h (Secondary Local Model)..."
 ollama pull granite4:micro-h
 
 # 4. Configuration
