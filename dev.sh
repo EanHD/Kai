@@ -27,9 +27,18 @@ if ! command -v cloudflared &> /dev/null; then
 fi
 
 echo "----------------------------------------------------------------"
-echo "🔗 Public URL will appear below:"
-cloudflared tunnel --url http://localhost:9000 2>&1 | grep -o 'https://.*\.trycloudflare.com' &
-TUNNEL_PID=$!
+
+if [ -f ~/.cloudflared/config.yml ]; then
+    echo "✅ Found existing tunnel configuration."
+    echo "🔗 Starting named tunnel (using config.yml)..."
+    cloudflared tunnel run &
+    TUNNEL_PID=$!
+    echo "✅ Tunnel active. Access at your configured domain (e.g. https://api.eanhd.com)"
+else
+    echo "🔗 Public URL will appear below:"
+    cloudflared tunnel --url http://localhost:9000 2>&1 | grep -o 'https://.*\.trycloudflare.com' &
+    TUNNEL_PID=$!
+fi
 
 # Keep script running
 wait
