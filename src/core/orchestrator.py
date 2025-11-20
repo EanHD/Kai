@@ -394,13 +394,20 @@ class Orchestrator:
                 exc_info=True,
             )
 
+            # In debug mode, show the actual error
+            debug_mode = os.getenv("DEBUG", "false").lower() == "true"
+            if debug_mode:
+                error_content = f"Error: {type(e).__name__}: {str(e)}"
+            else:
+                error_content = (
+                    "I encountered an issue processing your request. "
+                    "Please try rephrasing your question or try again later."
+                )
+
             return Response(
                 query_id=str(uuid.uuid4()),
                 mode="concise",
-                content=(
-                    "I encountered an issue processing your request. "
-                    "Please try rephrasing your question or try again later."
-                ),
+                content=error_content,
                 token_count=0,
                 cost=0.0,
             )
@@ -687,10 +694,17 @@ class Orchestrator:
                 f"message={str(e)} | time={elapsed_time:.2f}s",
                 exc_info=True,
             )
-            error_msg = (
-                "I encountered an issue processing your request. "
-                "Please try rephrasing your question or try again later."
-            )
+            
+            # In debug mode, show the actual error
+            debug_mode = os.getenv("DEBUG", "false").lower() == "true"
+            if debug_mode:
+                error_msg = f"Error: {type(e).__name__}: {str(e)}"
+            else:
+                error_msg = (
+                    "I encountered an issue processing your request. "
+                    "Please try rephrasing your question or try again later."
+                )
+            
             for char in error_msg:
                 yield char
                 await asyncio.sleep(0.01)
