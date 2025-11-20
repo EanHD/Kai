@@ -473,6 +473,13 @@ class SQLiteStore:
     # Knowledge Object operations
     def store_knowledge_object(self, knowledge_id: str, ko_data: dict[str, Any]) -> None:
         """Store a knowledge object."""
+        
+        def json_serializer(obj):
+            """JSON serializer for objects not serializable by default json code"""
+            if hasattr(obj, 'isoformat'):
+                return obj.isoformat()
+            raise TypeError(f"Type {type(obj)} not serializable")
+
         with self._get_connection() as conn:
             cursor = conn.cursor()
             cursor.execute(
@@ -486,7 +493,7 @@ class SQLiteStore:
                     ko_data["kind"],
                     ko_data["query"],
                     ko_data["summary"],
-                    json.dumps(ko_data),
+                    json.dumps(ko_data, default=json_serializer),
                     ko_data.get("created_at"),
                     ko_data.get("expires_at"),
                 ),
