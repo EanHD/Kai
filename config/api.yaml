@@ -56,14 +56,17 @@ response:
 cors:
   enabled: true
   allow_origins:
-    - "*"  # Restrict in production
+    - "http://localhost"
+    - "http://localhost:3000"
+    - "http://127.0.0.1"
+    - "http://127.0.0.1:3000"
+    - "https://eanhd.github.io"
+    - "*"
+  allow_credentials: true
   allow_methods:
-    - "GET"
-    - "POST"
-    - "OPTIONS"
+    - "*"
   allow_headers:
-    - "Content-Type"
-    - "Authorization"
+    - "*"
 
 # Rate limiting
 rate_limiting:
