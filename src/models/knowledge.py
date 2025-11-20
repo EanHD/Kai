@@ -21,7 +21,7 @@ class SuggestedFollowUp(BaseModel):
 
 class KnowledgeObject(BaseModel):
     version: str = "1.0"
-    kind: Literal["qa", "explanation", "comparison", "plan", "debug"] = "qa"
+    kind: Literal["qa", "explanation", "comparison", "plan", "debug", "refusal"] = "qa"
     query: str
     summary: str
     detailed_points: List[Point]

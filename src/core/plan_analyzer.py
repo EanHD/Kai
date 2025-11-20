@@ -431,7 +431,7 @@ class PlanAnalyzer:
 
             if not plan_dict:
                 logger.warning("Failed to parse plan JSON, using fallback")
-                return self._create_fallback_plan(query_text, source)
+                return await self._create_fallback_plan(query_text, source)
 
             # Validate plan structure BEFORE converting to Plan object
             # If query needs code_exec but plan doesn't have it, use fallback instead

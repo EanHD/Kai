@@ -83,6 +83,35 @@ async def lifespan(app: FastAPI):
     if not local_connector:
         logger.error("No local connector initialized - API will not function properly")
 
+    # Identify Planner and Narrator connectors based on config
+    planner_model_id = kai_config.get_env("planner_model")
+    narrator_model_id = kai_config.get_env("narrator_model")
+    
+    planner_connector = None
+    narrator_connector = None
+    
+    # Find planner connector
+    if planner_model_id:
+        if planner_model_id in external_connectors:
+            planner_connector = external_connectors[planner_model_id]
+            logger.info(f"Planner configured: {planner_model_id}")
+        elif local_connector and local_connector.config.get("model_id") == planner_model_id:
+            planner_connector = local_connector
+            logger.info(f"Planner configured: {planner_model_id} (Local)")
+        else:
+            logger.warning(f"Configured planner model {planner_model_id} not found in active connectors")
+            
+    # Find narrator connector
+    if narrator_model_id:
+        if narrator_model_id in external_connectors:
+            narrator_connector = external_connectors[narrator_model_id]
+            logger.info(f"Narrator configured: {narrator_model_id}")
+        elif local_connector and local_connector.config.get("model_id") == narrator_model_id:
+            narrator_connector = local_connector
+            logger.info(f"Narrator configured: {narrator_model_id} (Local)")
+        else:
+            logger.warning(f"Configured narrator model {narrator_model_id} not found in active connectors")
+
     # Initialize tools
     tools = {}
     enabled_tools = kai_config.get_enabled_tools()
@@ -113,6 +142,8 @@ async def lifespan(app: FastAPI):
         soft_cap_threshold=0.8,
         sqlite_store=storage,
         vector_store=vector_store,
+        planner_connector=planner_connector,
+        narrator_connector=narrator_connector,
     )
 
     # Inject conversation service for memory (create simple conversation service for API)

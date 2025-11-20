@@ -137,6 +137,9 @@ class ConfigLoader:
             "embedding_model": os.getenv(
                 "EMBEDDING_MODEL", "sentence-transformers/all-MiniLM-L6-v2"
             ),
+            # Roles
+            "planner_model": os.getenv("PLANNER_MODEL", "openai/gpt-oss-20b"),
+            "narrator_model": os.getenv("NARRATOR_MODEL", "smollm2:1.7b"),
         }
 
         # Validate required keys

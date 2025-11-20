@@ -22,20 +22,56 @@ class ReasoningEngine:
         """
         
         # 1. Construct System Prompt
-        schema_json = KnowledgeObject.model_json_schema()
+        # schema_json = KnowledgeObject.model_json_schema() # Too verbose for some models
         system_prompt = f"""
         You are a Senior Analyst AI. Your job is to produce a structured Knowledge Object (JSON) 
         that answers the user's query comprehensively.
         
         RULES:
-        1. Output ONLY valid JSON matching the schema below.
+        1. Output ONLY valid JSON.
         2. Do not chat or provide preamble.
         3. Be objective and factual.
         4. If tools were used, incorporate their results.
-        5. Explicitly state assumptions and limitations.
         
-        SCHEMA:
-        {json.dumps(schema_json, indent=2)}
+        REQUIRED JSON STRUCTURE:
+        {{
+          "query": "The original query string",
+          "summary": "A concise summary of the answer (2-3 sentences)",
+          "detailed_points": [
+            {{
+              "title": "Point Title",
+              "body": "Detailed explanation of this point",
+              "importance": "high|medium|low",
+              "citations": [
+                {{
+                  "source_id": "url",
+                  "snippet": "relevant text",
+                  "confidence": 0.9
+                }}
+              ]
+            }}
+          ],
+          "confidence": 0.0 to 1.0,
+          "limitations": ["List of any missing info or uncertainties"],
+          "kind": "explanation|qa|refusal"
+        }}
+        
+        EXAMPLE OUTPUT:
+        {{
+          "query": "Why is the sky blue?",
+          "summary": "The sky appears blue due to Rayleigh scattering...",
+          "detailed_points": [
+            {{
+              "title": "Rayleigh Scattering",
+              "body": "Sunlight reaches Earth's atmosphere and is scattered...",
+              "importance": "high",
+              "citations": []
+            }}
+          ],
+          "confidence": 0.95,
+          "limitations": [],
+          "kind": "explanation"
+        }}
         """
         
         # 2. Construct User Prompt
@@ -61,15 +97,51 @@ class ReasoningEngine:
         )
         
         # 4. Parse and Validate
+        content = response.content.strip()
+        
+        # Clean up markdown code blocks if present
+        if content.startswith("```json"):
+            content = content[7:]
+        if content.startswith("```"):
+            content = content[3:]
+        if content.endswith("```"):
+            content = content[:-3]
+        content = content.strip()
+            
+        data = None
         try:
-            data = json.loads(response.content)
+            data = json.loads(content)
+        except json.JSONDecodeError:
+            # Attempt to fix common JSON errors
+            try:
+                # Sometimes models double-escape quotes or wrap in extra braces
+                if content.startswith("{{") and content.endswith("}}"):
+                    content = content[1:-1]
+                
+                # Try to find the first { and last }
+                start = content.find("{")
+                end = content.rfind("}")
+                if start != -1 and end != -1:
+                    content = content[start:end+1]
+                    data = json.loads(content)
+            except Exception:
+                pass
+        
+        if data is None:
+            logger.error(f"Failed to parse JSON from Reasoner: {response.content}")
+            raise ValueError("Reasoner failed to produce valid JSON")
+
+        if isinstance(data, list):
+            if len(data) > 0 and isinstance(data[0], dict):
+                data = data[0]
+            else:
+                raise ValueError("Reasoner returned a list, expected a dictionary")
+
+        try:
             # Ensure required fields are present or set defaults if missing
             # The LLM might miss some optional fields, Pydantic will handle validation
             ko = KnowledgeObject(**data)
             return ko
-        except json.JSONDecodeError:
-            logger.error(f"Failed to parse JSON from Reasoner: {response.content}")
-            raise ValueError("Reasoner failed to produce valid JSON")
         except Exception as e:
             logger.error(f"Validation failed for Reasoner output: {e}")
             raise ValueError(f"Reasoner output did not match schema: {e}")
