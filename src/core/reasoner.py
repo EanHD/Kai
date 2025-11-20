@@ -128,8 +128,45 @@ class ReasoningEngine:
                 pass
         
         if data is None:
-            logger.error(f"Failed to parse JSON from Reasoner: {response.content}")
-            raise ValueError("Reasoner failed to produce valid JSON")
+            logger.warning(f"JSON parse failed, attempting repair. Content prefix: {content[:100]}...")
+            
+            # Attempt repair via LLM
+            try:
+                repair_prompt = f"""
+                The following JSON is invalid. Please fix it and return ONLY the valid JSON.
+                
+                INVALID JSON:
+                {content}
+                """
+                
+                repair_messages = [
+                    Message(role="system", content="You are a JSON repair tool. Output ONLY valid JSON."),
+                    Message(role="user", content=repair_prompt)
+                ]
+                
+                repair_response = await self.connector.generate(
+                    messages=repair_messages,
+                    temperature=0.0,
+                    json_mode=True
+                )
+                
+                # Try parsing repair response
+                repair_content = repair_response.content.strip()
+                if repair_content.startswith("```json"):
+                    repair_content = repair_content[7:]
+                if repair_content.startswith("```"):
+                    repair_content = repair_content[3:]
+                if repair_content.endswith("```"):
+                    repair_content = repair_content[:-3]
+                repair_content = repair_content.strip()
+                
+                data = json.loads(repair_content)
+                logger.info("JSON successfully repaired by LLM")
+                
+            except Exception as e:
+                logger.error(f"JSON repair failed: {e}")
+                logger.error(f"Original failed content: {response.content}")
+                raise ValueError("Reasoner failed to produce valid JSON")
 
         if isinstance(data, list):
             if len(data) > 0 and isinstance(data[0], dict):
