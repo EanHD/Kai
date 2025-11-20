@@ -53,8 +53,9 @@ async def lifespan(app: FastAPI):
     kai_config = ConfigLoader()
 
     # Initialize LLM connectors
-    local_connector = None
+    local_connectors = {}
     external_connectors = {}
+    primary_local_connector = None
 
     active_models = kai_config.get_active_models()
     for model_config in active_models:
@@ -70,8 +71,13 @@ async def lifespan(app: FastAPI):
 
         if model_config.provider == "ollama":
             ollama_url = kai_config.get_env("ollama_base_url")
-            local_connector = OllamaProvider(config_dict, ollama_url)
+            connector = OllamaProvider(config_dict, ollama_url)
+            local_connectors[model_config.model_id] = connector
             logger.info(f"Initialized Ollama: {model_config.model_name}")
+            
+            # Set primary local connector (prefer high priority or first one)
+            if not primary_local_connector or model_config.routing_priority > 9:
+                primary_local_connector = connector
 
         elif model_config.provider == "openrouter":
             api_key = kai_config.get_env("openrouter_api_key")
@@ -80,7 +86,7 @@ async def lifespan(app: FastAPI):
                 external_connectors[model_config.model_id] = connector
                 logger.info(f"Initialized OpenRouter: {model_config.model_name}")
 
-    if not local_connector:
+    if not primary_local_connector:
         logger.error("No local connector initialized - API will not function properly")
 
     # Identify Planner and Narrator connectors based on config
@@ -95,8 +101,8 @@ async def lifespan(app: FastAPI):
         if planner_model_id in external_connectors:
             planner_connector = external_connectors[planner_model_id]
             logger.info(f"Planner configured: {planner_model_id}")
-        elif local_connector and local_connector.config.get("model_id") == planner_model_id:
-            planner_connector = local_connector
+        elif planner_model_id in local_connectors:
+            planner_connector = local_connectors[planner_model_id]
             logger.info(f"Planner configured: {planner_model_id} (Local)")
         else:
             logger.warning(f"Configured planner model {planner_model_id} not found in active connectors")
@@ -106,8 +112,8 @@ async def lifespan(app: FastAPI):
         if narrator_model_id in external_connectors:
             narrator_connector = external_connectors[narrator_model_id]
             logger.info(f"Narrator configured: {narrator_model_id}")
-        elif local_connector and local_connector.config.get("model_id") == narrator_model_id:
-            narrator_connector = local_connector
+        elif narrator_model_id in local_connectors:
+            narrator_connector = local_connectors[narrator_model_id]
             logger.info(f"Narrator configured: {narrator_model_id} (Local)")
         else:
             logger.warning(f"Configured narrator model {narrator_model_id} not found in active connectors")
@@ -135,7 +141,7 @@ async def lifespan(app: FastAPI):
     
     # Initialize orchestrator
     orchestrator = Orchestrator(
-        local_connector=local_connector,
+        local_connector=primary_local_connector,
         external_connectors=external_connectors,
         tools=tools,
         cost_limit=100.0,  # High limit for API usage
@@ -158,10 +164,10 @@ async def lifespan(app: FastAPI):
     # Initialize reflection agent for continuous learning (always-on)
     memory_vault = None
     reflection_agent = None
-    if local_connector:
+    if primary_local_connector:
         # Use a system user ID for API server reflections
         memory_vault = MemoryVault(user_id="api_server")
-        reflection_agent = ReflectionAgent(local_connector, memory_vault)
+        reflection_agent = ReflectionAgent(primary_local_connector, memory_vault)
         app.state.memory_vault = memory_vault
         app.state.reflection_agent = reflection_agent
         logger.info("Reflection agent initialized - continuous learning enabled")
