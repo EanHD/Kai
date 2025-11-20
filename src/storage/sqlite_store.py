@@ -128,6 +128,21 @@ class SQLiteStore:
                 )
             """)
 
+            # Knowledge Objects
+            cursor.execute("""
+                CREATE TABLE IF NOT EXISTS knowledge_objects (
+                    knowledge_id TEXT PRIMARY KEY,
+                    kind TEXT NOT NULL,
+                    query TEXT NOT NULL,
+                    summary TEXT NOT NULL,
+                    json_blob TEXT NOT NULL,
+                    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                    expires_at TIMESTAMP,
+                    access_count INTEGER DEFAULT 0,
+                    last_accessed_at TIMESTAMP
+                )
+            """)
+
             # Create indexes for performance
             cursor.execute("CREATE INDEX IF NOT EXISTS idx_conv_user ON conversations(user_id)")
             cursor.execute("CREATE INDEX IF NOT EXISTS idx_msg_session ON messages(session_id)")
@@ -138,6 +153,7 @@ class SQLiteStore:
                 "CREATE INDEX IF NOT EXISTS idx_model_active "
                 "ON model_configs(active, routing_priority)"
             )
+            cursor.execute("CREATE INDEX IF NOT EXISTS idx_ko_query ON knowledge_objects(query)")
 
             logger.info(f"Database schema initialized at {self.db_path}")
 
@@ -453,3 +469,55 @@ class SQLiteStore:
                 ),
             )
             logger.info(f"Stored model config: {config['model_id']}")
+
+    # Knowledge Object operations
+    def store_knowledge_object(self, knowledge_id: str, ko_data: dict[str, Any]) -> None:
+        """Store a knowledge object."""
+        with self._get_connection() as conn:
+            cursor = conn.cursor()
+            cursor.execute(
+                """
+                INSERT OR REPLACE INTO knowledge_objects (
+                    knowledge_id, kind, query, summary, json_blob, created_at, expires_at
+                ) VALUES (?, ?, ?, ?, ?, ?, ?)
+                """,
+                (
+                    knowledge_id,
+                    ko_data["kind"],
+                    ko_data["query"],
+                    ko_data["summary"],
+                    json.dumps(ko_data),
+                    ko_data.get("created_at"),
+                    ko_data.get("expires_at"),
+                ),
+            )
+
+    def get_knowledge_object(self, knowledge_id: str) -> dict[str, Any] | None:
+        """Retrieve a knowledge object by ID."""
+        with self._get_connection() as conn:
+            cursor = conn.cursor()
+            cursor.execute("SELECT * FROM knowledge_objects WHERE knowledge_id = ?", (knowledge_id,))
+            row = cursor.fetchone()
+            if row:
+                data = dict(row)
+                # Parse the JSON blob to get the full object
+                try:
+                    return json.loads(data["json_blob"])
+                except json.JSONDecodeError:
+                    logger.error(f"Failed to parse JSON for KO {knowledge_id}")
+                    return None
+            return None
+
+    def increment_knowledge_access(self, knowledge_id: str) -> None:
+        """Update access stats for a knowledge object."""
+        with self._get_connection() as conn:
+            cursor = conn.cursor()
+            cursor.execute(
+                """
+                UPDATE knowledge_objects
+                SET access_count = access_count + 1,
+                    last_accessed_at = CURRENT_TIMESTAMP
+                WHERE knowledge_id = ?
+                """,
+                (knowledge_id,),
+            )

@@ -69,6 +69,11 @@ class VectorStore:
             metadata={"description": "Cached tool execution results"}
         )
         
+        self.knowledge_embeddings = self.client.get_or_create_collection(
+            name="knowledge_embeddings",
+            metadata={"description": "Embeddings for Knowledge Objects"}
+        )
+        
         logger.info("Vector store collections initialized")
 
     # User Memory operations
@@ -406,3 +411,75 @@ class VectorStore:
             return result
         
         return None
+
+    # Knowledge Object operations
+    def store_knowledge_embedding(
+        self,
+        knowledge_id: str,
+        query: str,
+        summary: str,
+        vector: list[float],
+        kind: str,
+        timestamp: str,
+        metadata: dict[str, Any] | None = None,
+    ) -> None:
+        """Store knowledge object embedding."""
+        if not self.client:
+            return
+
+        meta = {
+            "kind": kind,
+            "timestamp": timestamp,
+            **(metadata or {}),
+        }
+        
+        # Combine query and summary for embedding context
+        content = f"Query: {query}\nSummary: {summary}"
+        
+        self.knowledge_embeddings.add(
+            ids=[knowledge_id],
+            embeddings=[vector],
+            documents=[content],
+            metadatas=[meta]
+        )
+
+    def search_knowledge_objects(
+        self,
+        query_vector: list[float],
+        top_k: int = 5,
+        kind: str | None = None,
+        similarity_threshold: float = 0.75,
+    ) -> list[dict[str, Any]]:
+        """Search for similar knowledge objects."""
+        if not self.client:
+            return []
+
+        where_filter = {}
+        if kind:
+            where_filter["kind"] = kind
+
+        results = self.knowledge_embeddings.query(
+            query_embeddings=[query_vector],
+            n_results=top_k,
+            where=where_filter if where_filter else None
+        )
+
+        formatted_results = []
+        if results['ids'] and len(results['ids'][0]) > 0:
+            for i, id_val in enumerate(results['ids'][0]):
+                distance = results['distances'][0][i]
+                similarity = 1.0 / (1.0 + distance)
+                
+                if similarity >= similarity_threshold:
+                    metadata = results['metadatas'][0][i]
+                    result = {
+                        "knowledge_id": id_val,
+                        "content": results['documents'][0][i],
+                        "_distance": distance,
+                        "_similarity": similarity,
+                        "kind": metadata.get("kind"),
+                        "timestamp": metadata.get("timestamp"),
+                    }
+                    formatted_results.append(result)
+
+        return formatted_results

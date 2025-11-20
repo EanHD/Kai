@@ -17,6 +17,7 @@ from src.api.config import APIConfig
 from src.lib.logger import setup_logging
 from src.core.orchestrator import Orchestrator
 from src.storage.sqlite_store import SQLiteStore
+from src.storage.vector_store import VectorStore
 from src.storage.memory_vault import MemoryVault
 from src.agents.reflection_agent import ReflectionAgent
 from src.core.providers.ollama_provider import OllamaProvider
@@ -43,6 +44,10 @@ async def lifespan(app: FastAPI):
     # Initialize SQLite storage
     storage = SQLiteStore(db_path="data/kai.db")
     app.state.storage = storage
+
+    # Initialize Vector storage
+    vector_store = VectorStore(db_path="data/vectors")
+    app.state.vector_store = vector_store
 
     # Load Kai configuration for LLM settings
     kai_config = ConfigLoader()
@@ -106,6 +111,8 @@ async def lifespan(app: FastAPI):
         tools=tools,
         cost_limit=100.0,  # High limit for API usage
         soft_cap_threshold=0.8,
+        sqlite_store=storage,
+        vector_store=vector_store,
     )
 
     # Inject conversation service for memory (create simple conversation service for API)

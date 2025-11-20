@@ -13,12 +13,17 @@ from src.core.llm_connector import LLMConnector, Message
 from src.core.plan_analyzer import PlanAnalyzer
 from src.core.plan_executor import PlanExecutor
 from src.core.presenters.granite_presenter import GranitePresenter
+from src.core.presenters.local_presenter import LocalPresenter
 from src.core.query_analyzer import QueryAnalyzer
 from src.core.sanity_checker import SanityChecker
 from src.core.specialists.verification import SpecialistVerifier
+from src.core.reasoner import ReasoningEngine
 from src.embeddings.factory import get_shared_embeddings_provider
 from src.models.conversation import ConversationSession
 from src.models.response import Response
+from src.storage.sqlite_store import SQLiteStore
+from src.storage.vector_store import VectorStore
+from src.storage.knowledge_store import KnowledgeStore
 from src.tools.base_tool import BaseTool
 
 logger = logging.getLogger(__name__)
@@ -34,6 +39,8 @@ class Orchestrator:
         tools: dict[str, BaseTool] | None = None,
         cost_limit: float = 1.0,
         soft_cap_threshold: float = 0.8,
+        sqlite_store: SQLiteStore | None = None,
+        vector_store: VectorStore | None = None,
     ):
         """Initialize orchestrator.
 
@@ -43,6 +50,8 @@ class Orchestrator:
             tools: Optional dict of tool implementations
             cost_limit: Maximum cost limit in USD
             soft_cap_threshold: Percentage for soft cap warning (0.0-1.0)
+            sqlite_store: SQLite storage instance
+            vector_store: Vector storage instance
         """
         self.local_connector = local_connector
         self.external_connectors = external_connectors or {}
@@ -52,6 +61,33 @@ class Orchestrator:
 
         # Initialize embeddings provider
         self.embeddings_provider = get_shared_embeddings_provider()
+
+        # Initialize Knowledge Components
+        if sqlite_store and vector_store:
+            self.knowledge_store = KnowledgeStore(
+                sqlite_store=sqlite_store,
+                vector_store=vector_store,
+                embeddings_provider=self.embeddings_provider
+            )
+        else:
+            logger.warning("Knowledge Store not initialized (missing stores)")
+            self.knowledge_store = None
+
+        # Initialize Reasoner (use strong connector if available)
+        reasoner_connector = None
+        for model_name, connector in self.external_connectors.items():
+            if "claude" in model_name.lower() or "sonnet" in model_name.lower():
+                reasoner_connector = connector
+                break
+        
+        if not reasoner_connector:
+             # Fallback to any external or local
+             reasoner_connector = next(iter(self.external_connectors.values()), self.local_connector)
+             
+        self.reasoner = ReasoningEngine(reasoner_connector)
+        
+        # Initialize Local Presenter
+        self.local_presenter = LocalPresenter(self.local_connector)
 
         # Core orchestration components
         # QueryAnalyzer for complexity detection (used for smart routing)
@@ -624,6 +660,18 @@ class Orchestrator:
                 f"capabilities={capabilities}"
             )
 
+            # 1. Check Cache (Knowledge Store)
+            if self.knowledge_store:
+                cached_kos = self.knowledge_store.search(query_text, top_k=1, similarity_threshold=0.9)
+                if cached_kos:
+                    logger.info(f"🧠 CACHE HIT | Found Knowledge Object {cached_kos[0].summary[:50]}...")
+                    async for chunk in self.local_presenter.narrate_knowledge_object(cached_kos[0]):
+                        yield chunk
+                    
+                    elapsed_time = time.time() - start_time
+                    logger.info(f"✅ CACHE STREAM COMPLETE | time={elapsed_time:.2f}s")
+                    return
+
             # Get conversation context
             conversation_context = []
             if self.conversation_service:
@@ -636,7 +684,8 @@ class Orchestrator:
                 except Exception as e:
                     logger.warning(f"Failed to get context for planning: {e}")
 
-            # Step 1: Analyze → Plan (non-streaming)
+            # 2. Determine if Tools are needed
+            # We use the existing PlanAnalyzer to check if we need tools
             plan = await self.plan_analyzer.analyze(
                 query_text,
                 source=source,
@@ -645,46 +694,32 @@ class Orchestrator:
                 else None,
             )
 
-            logger.info(
-                f"📋 PLAN GENERATED | intent={plan.intent} | "
-                f"complexity={plan.complexity.value} | "
-                f"steps={len(plan.steps)}"
+            tools_output = None
+            
+            # If plan has steps (tools needed), execute them
+            if plan.steps:
+                logger.info(f"🛠️  TOOLS REQUIRED | steps={len(plan.steps)}")
+                execution_results = await self.plan_executor.execute(plan)
+                if isinstance(execution_results, dict):
+                    tools_output = execution_results.get("tool_results", {})
+            else:
+                logger.info("🧠 PURE REASONING | No tools required")
+
+            # 3. Call Reasoner to produce Knowledge Object
+            logger.info("🤔 REASONING START")
+            ko = await self.reasoner.analyze(
+                query=query_text,
+                context={"conversation_history": conversation_context},
+                tools_output=tools_output
             )
+            logger.info("💡 REASONING COMPLETE")
 
-            # Step 2: Execute → Results (non-streaming)
-            execution_results = await self.plan_executor.execute(plan)
+            # 4. Store Knowledge Object
+            if self.knowledge_store:
+                self.knowledge_store.store(ko)
 
-            if not isinstance(execution_results, dict):
-                execution_results = {"tool_results": {}, "specialist_results": {}}
-
-            tool_results = execution_results.get("tool_results", {})
-            specialist_results = execution_results.get("specialist_results", {})
-
-            logger.info(
-                f"⚙️  EXECUTION COMPLETE | "
-                f"tools={len(tool_results)} | "
-                f"specialists={len(specialist_results)}"
-            )
-
-            # Get conversation history for presenter
-            conversation_history = []
-            if self.conversation_service:
-                try:
-                    messages = self.conversation_service.get_messages(
-                        conversation.session_id, limit=10
-                    )
-                    conversation_history = messages
-                except Exception as e:
-                    logger.warning(f"Failed to retrieve conversation history: {e}")
-
-            # Step 3: Stream final presentation
-            async for chunk in self.presenter.finalize_stream(
-                original_query=query_text,
-                plan=plan.to_dict(),
-                tool_results=tool_results,
-                specialist_results=specialist_results,
-                conversation_history=conversation_history,
-            ):
+            # 5. Narrate Knowledge Object
+            async for chunk in self.local_presenter.narrate_knowledge_object(ko):
                 yield chunk
 
             elapsed_time = time.time() - start_time
