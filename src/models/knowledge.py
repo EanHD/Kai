@@ -4,10 +4,13 @@ from typing import List, Optional, Literal, Dict, Any
 from datetime import datetime
 
 class Citation(BaseModel):
-    source_id: str          # URL, doc_id, etc.
+    source_id: str = Field(..., alias="source")          # URL, doc_id, etc.
     snippet: str
     span: Optional[str] = None  # line range, paragraph id
     confidence: float
+
+    class Config:
+        populate_by_name = True
 
 class Point(BaseModel):
     title: str
