@@ -60,6 +60,26 @@ docker build -t kai-api .
 docker run -p 9000:9000 kai-api
 ```
 
+## Cloudflare Tunnel (Custom Domain)
+
+To use your own domain (e.g., `api.eanhd.com`) instead of a random URL:
+
+1. **Run the setup script**:
+
+   ```bash
+   ./setup_tunnel.sh
+   ```
+
+   Follow the prompts to login to Cloudflare, create a tunnel, and route your DNS.
+
+2. **Start Production**:
+
+   ```bash
+   ./prod.sh
+   ```
+
+   The script will automatically detect your tunnel configuration and use it.
+
 ## Environment Variables
 
 ```bash

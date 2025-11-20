@@ -55,7 +55,11 @@ class Orchestrator:
 
         # Core orchestration components
         # QueryAnalyzer for complexity detection (used for smart routing)
-        self.query_analyzer = QueryAnalyzer(embeddings_provider=self.embeddings_provider)
+        # Pass local_connector for intelligent LLM-based analysis
+        self.query_analyzer = QueryAnalyzer(
+            embeddings_provider=self.embeddings_provider,
+            llm_connector=self.local_connector
+        )
 
         # Use external model (Grok) for planning if available, fallback to local
         planner_connector = None
@@ -169,7 +173,7 @@ class Orchestrator:
 
             # Step 1: Quick complexity check for simple queries
             # This saves expensive Grok calls for chitchat
-            quick_analysis = self.query_analyzer.analyze(query_text)
+            quick_analysis = await self.query_analyzer.analyze(query_text)
             complexity_score = quick_analysis.get("complexity_score", 0.5)
             capabilities = quick_analysis.get("capabilities", [])
             
@@ -566,7 +570,7 @@ class Orchestrator:
                 return
 
             # Step 1: Quick complexity check
-            quick_analysis = self.query_analyzer.analyze(query_text)
+            quick_analysis = await self.query_analyzer.analyze(query_text)
             complexity_score = quick_analysis.get("complexity_score", 0.5)
             capabilities = quick_analysis.get("capabilities", [])
 

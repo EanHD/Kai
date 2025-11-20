@@ -30,31 +30,24 @@
 **Get running in 5 minutes** → **[QUICKSTART.md](QUICKSTART.md)**
 
 ```bash
-# Install
-uv sync
-ollama pull granite4:tiny-h
-pip install duckduckgo-search
-cp .env.template .env
+# 1. Install dependencies & models
+./install.sh
 
-# Run CLI (auto-starts Ollama & Docker)
-./kai
+# 2. Run Development Mode (API + Tunnel + Logs)
+./dev.sh
 
-# OR run API + Web Playground
-python -m src.api.main
-# Then open playground/index.html in your browser
+# OR Run Production Mode (Background Service)
+./prod.sh
 ```
 
 **Services auto-start for you** - no manual setup needed!
+- **API**: http://localhost:9000
+- **Public URL**: Auto-generated Cloudflare Tunnel (see logs)
+- **Playground**: http://localhost:9000/playground/index.html
 
 ### 🎮 Web Playground
 
-Try Kai in a beautiful web interface! After starting the API, open `playground/index.html` in your browser for a modern chat experience with:
-- Multi-conversation management
-- Real-time cost tracking  
-- Citation display
-- Dark mode UI
-
-See [playground/README.md](playground/README.md) for details.
+Try Kai in a beautiful web interface! After starting the API, open `playground/index.html` in your browser (or use the public URL provided in the logs).
 
 ## How Kai Improves Over Time
 
@@ -95,36 +88,30 @@ Kai doesn't fine-tune base models. Instead, it learns through a **closed self-im
    cd kai
    ```
 
-2. **Install dependencies**:
-
+2. **Run the installer**:
    ```bash
-   # Using uv (recommended)
-   uv sync
-
-   # Or with pip
-   pip install -e .
+   ./install.sh
    ```
-
-3. **Set up Ollama**:
-   ```bash
-   # Install Ollama (https://ollama.ai)
-   # Pull the local Granite model used by Kai
-   ollama pull granite4:tiny-h
-   ollama serve
-   ```
-
-4. **Configure environment**:
-   ```bash
-   cp .env.template .env
-   # Edit .env with your settings
-   ```
-
-5. **Build Docker sandbox image** (optional, for code execution):
-   ```bash
-   docker build -t kai-python-sandbox:latest -f docker/Dockerfile .
-   ```
+   This script will:
+   - Install `uv` (if missing)
+   - Install Python dependencies
+   - Pull required Ollama models
+   - Set up Cloudflare Tunnel (optional)
+   - Create your `.env` file
 
 ### Usage
+
+**Start the API server (Recommended)**:
+
+```bash
+# Development mode (foreground + logs)
+./dev.sh
+
+# Production mode (background service)
+./prod.sh
+```
+
+Once running, visit `http://localhost:9000/docs`.
 
 **Start interactive chat (CLI)**:
 
@@ -418,13 +405,14 @@ kai/
 ### Running Tests
 
 ```bash
-# Run all tests (from repo root)
-pytest
+# Run all tests (recommended)
+./test.sh
 
-# Run with coverage
-pytest --cov=src --cov-report=html
+# Run specific test suite
+./test.sh --unit
+./test.sh --integration
 
-# Run specific test file
+# Run with pytest directly
 pytest tests/unit/test_cost_tracker.py
 ```
 

@@ -1,10 +1,13 @@
 """Query analyzer for complexity detection and capability requirements."""
 
+import json
 import logging
 import re
 from typing import Any, Optional
 
 import numpy as np
+
+from src.core.llm_connector import LLMConnector, Message
 
 logger = logging.getLogger(__name__)
 
@@ -12,17 +15,27 @@ logger = logging.getLogger(__name__)
 class QueryAnalyzer:
     """Analyzes queries to determine complexity and required capabilities."""
 
-    def __init__(self, embeddings_provider=None):
-        """Initialize query analyzer with optional embeddings provider for topic detection.
+    def __init__(
+        self,
+        embeddings_provider=None,
+        llm_connector: Optional[LLMConnector] = None,
+    ):
+        """Initialize query analyzer.
 
         Args:
             embeddings_provider: Optional EmbeddingsProvider instance for semantic analysis
+            llm_connector: Optional LLMConnector for intelligent analysis
         """
         self.embeddings_provider = embeddings_provider
+        self.llm_connector = llm_connector
+        
         if self.embeddings_provider:
             logger.debug("QueryAnalyzer initialized with embeddings provider")
+        
+        if self.llm_connector:
+            logger.debug("QueryAnalyzer initialized with LLM connector")
         else:
-            logger.debug("QueryAnalyzer initialized without embeddings (topic shift detection disabled)")
+            logger.warning("QueryAnalyzer initialized WITHOUT LLM connector - falling back to regex")
 
     # Keywords for different query types
     WEB_SEARCH_KEYWORDS = [
@@ -383,7 +396,7 @@ class QueryAnalyzer:
 
         return float(dot_product / (norm1 * norm2))
 
-    def analyze(
+    async def analyze(
         self, query_text: str, previous_topic_embedding: Optional[list[float]] = None
     ) -> dict[str, Any]:
         """Analyze query for complexity, capabilities, and topic shifts.
@@ -395,12 +408,117 @@ class QueryAnalyzer:
         Returns:
             Analysis dict with complexity, capabilities, complexity_score, topic_shift, etc.
         """
-        text_lower = query_text.lower()
-
-        # Detect topic shift
+        # Detect topic shift (always do this if embeddings available)
         topic_shift, current_embedding = self.detect_topic_shift(
             query_text, previous_topic_embedding
         )
+
+        # Try LLM-based analysis first if connector is available
+        if self.llm_connector:
+            try:
+                llm_result = await self._analyze_with_llm(query_text)
+                if llm_result:
+                    # SAFETY CHECK: If LLM says simple/no tools, but regex detects strong code/search patterns,
+                    # trust the regex (hybrid approach)
+                    regex_result = self._analyze_with_regex(query_text, topic_shift, current_embedding)
+                    
+                    # If regex detects code_exec but LLM didn't
+                    if "code_exec" in regex_result["required_capabilities"] and "code_exec" not in llm_result["required_capabilities"]:
+                        logger.info("⚠️ Hybrid Analysis: Overriding LLM to add code_exec based on regex pattern")
+                        llm_result["required_capabilities"].append("code_exec")
+                        llm_result["complexity_score"] = max(llm_result["complexity_score"], 0.6)
+                        llm_result["complexity_level"] = "moderate"
+                        llm_result["routing_decision"] = "external" # Force external/planning path
+
+                    # Merge topic shift info
+                    llm_result["topic_shift"] = topic_shift
+                    llm_result["current_topic_embedding"] = current_embedding
+                    return llm_result
+            except Exception as e:
+                logger.error(f"LLM analysis failed, falling back to regex: {e}")
+
+        # Fallback to regex-based analysis
+        return self._analyze_with_regex(query_text, topic_shift, current_embedding)
+
+    async def _analyze_with_llm(self, query_text: str) -> Optional[dict[str, Any]]:
+        """Analyze query using local LLM for intelligent routing.
+        
+        Args:
+            query_text: User query text
+            
+        Returns:
+            Analysis dict or None if failed
+        """
+        system_prompt = """You are the Router for an AI system. Analyze the user's query and output a JSON object.
+        
+        Determine:
+        1. complexity_score: 0.0 (trivial) to 1.0 (impossible).
+           - < 0.2: Greetings, simple facts (capital of France), chitchat.
+           - 0.2-0.5: Simple questions needing 1 tool (weather, basic math).
+           - 0.5-0.8: Complex questions, multi-step reasoning, comparisons.
+           - > 0.8: Advanced physics, coding entire apps, deep research.
+           
+        2. required_capabilities: List of ["web_search", "code_exec", "rag"].
+           - web_search: For current events, news, prices, specs, weather, "who is".
+           - code_exec: For ANY math, calculations, unit conversions, date/time logic.
+           - rag: For "remember", "recall", "what did I say", "my preferences".
+           
+        3. complexity_level: "simple", "moderate", "complex".
+        
+        4. routing_decision: "local" (simple/moderate) or "external" (complex).
+        
+        Output JSON ONLY. No markdown.
+        Example: {"complexity_score": 0.1, "required_capabilities": [], "complexity_level": "simple", "routing_decision": "local"}
+        """
+
+        try:
+            response = await self.llm_connector.generate(
+                messages=[
+                    Message(role="system", content=system_prompt),
+                    Message(role="user", content=query_text)
+                ],
+                temperature=0.1, # Deterministic
+                max_tokens=200,
+                response_format={"type": "json_object"}
+            )
+            
+            # Parse JSON
+            content = response.content.strip()
+            # Handle potential markdown code blocks
+            if "```json" in content:
+                content = content.split("```json")[1].split("```")[0].strip()
+            elif "```" in content:
+                content = content.split("```")[1].split("```")[0].strip()
+                
+            data = json.loads(content)
+            
+            # Validate and normalize
+            capabilities = data.get("required_capabilities", [])
+            if isinstance(capabilities, str):
+                capabilities = [capabilities]
+                
+            return {
+                "complexity_level": data.get("complexity_level", "simple"),
+                "complexity_score": float(data.get("complexity_score", 0.1)),
+                "required_capabilities": capabilities,
+                "requires_multi_hop": data.get("complexity_score", 0.0) > 0.6,
+                "routing_decision": data.get("routing_decision", "local"),
+                "confidence": 0.9,
+                "memory_operation": self._detect_memory_operation(query_text.lower()) if "rag" in capabilities else None
+            }
+            
+        except Exception as e:
+            logger.error(f"Error in _analyze_with_llm: {e}")
+            return None
+
+    def _analyze_with_regex(
+        self, 
+        query_text: str, 
+        topic_shift: bool, 
+        current_embedding: Optional[list[float]]
+    ) -> dict[str, Any]:
+        """Legacy regex-based analysis (fallback)."""
+        text_lower = query_text.lower()
 
         # Detect required capabilities
         capabilities = []

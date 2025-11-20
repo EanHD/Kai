@@ -376,7 +376,10 @@ class PlanAnalyzer:
             embeddings_provider: Optional embeddings provider for QueryAnalyzer
         """
         self.connector = local_connector
-        self.query_analyzer = QueryAnalyzer(embeddings_provider=embeddings_provider)
+        self.query_analyzer = QueryAnalyzer(
+            embeddings_provider=embeddings_provider,
+            llm_connector=local_connector
+        )
         self.orchestrator = orchestrator
 
     async def analyze(
@@ -432,7 +435,7 @@ class PlanAnalyzer:
 
             # Validate plan structure BEFORE converting to Plan object
             # If query needs code_exec but plan doesn't have it, use fallback instead
-            analysis = self.query_analyzer.analyze(query_text)
+            analysis = await self.query_analyzer.analyze(query_text)
             required_caps = analysis.get("required_capabilities", [])
 
             if "code_exec" in required_caps:
@@ -447,7 +450,7 @@ class PlanAnalyzer:
                         "Query requires code_exec but Granite's plan has no code_exec step | "
                         "Falling back to query-analyzer-based plan"
                     )
-                    return self._create_fallback_plan(query_text, source)
+                    return await self._create_fallback_plan(query_text, source)
 
             # Convert to Plan object
             plan = self._dict_to_plan(plan_dict, query_text, source)
@@ -462,7 +465,7 @@ class PlanAnalyzer:
 
         except Exception as e:
             logger.error(f"Plan generation failed: {e}", exc_info=True)
-            return self._create_fallback_plan(query_text, source)
+            return await self._create_fallback_plan(query_text, source)
 
     def _parse_plan_json(self, response: str) -> dict | None:
         """Parse JSON from LLM response.
@@ -561,10 +564,10 @@ class PlanAnalyzer:
             steps=steps,
         )
 
-    def _create_fallback_plan(self, query_text: str, source: str = "api") -> Plan:
+    async def _create_fallback_plan(self, query_text: str, source: str = "api") -> Plan:
         """Create simple fallback plan when analysis fails.
 
-        Uses QueryAnalyzer to detect required capabilities even when
+        Uses QueryAnalyzer to detect capabilities even when
         LLM-based planning fails.
 
         Args:
@@ -575,7 +578,7 @@ class PlanAnalyzer:
             Plan with detected capabilities
         """
         # Use query analyzer to detect capabilities
-        analysis = self.query_analyzer.analyze(query_text)
+        analysis = await self.query_analyzer.analyze(query_text)
         required_caps = analysis.get("required_capabilities", [])
 
         # Create steps based on detected capabilities

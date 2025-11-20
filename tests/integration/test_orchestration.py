@@ -47,6 +47,8 @@ def mock_conversation():
     """Create mock conversation session."""
     session = MagicMock(spec=ConversationSession)
     session.session_id = "test-session"
+    session.context_window = []
+    session.tool_results_cache = {}
     return session
 
 

@@ -228,7 +228,7 @@ class TestLongConversations:
                 print(f"  Progress: {(i + 1) * 2} messages in conversation")
 
         # Verify conversation state
-        assert len(conversation.messages) >= 50, "Should have ≥50 messages"
+        assert conversation.message_count >= 50, "Should have ≥50 messages"
 
         # Final query should still work
         final_response = await stress_test_orchestrator.process_query(
@@ -239,7 +239,7 @@ class TestLongConversations:
 
         assert final_response.content, "Should handle query after long conversation"
 
-        print(f"✅ PASS: Long conversation handled ({len(conversation.messages)} messages)")
+        print(f"✅ PASS: Long conversation handled ({conversation.message_count} messages)")
 
 
 # ============================================================================
@@ -346,6 +346,8 @@ class TestCostExhaustion:
             "model_id": "granite-stress",
             "model_name": "granite4:micro-h",
             "provider": "ollama",
+            "cost_per_1k_input": 0.1,  # High cost to hit limit fast
+            "cost_per_1k_output": 0.1,
         }
         local_connector = OllamaProvider(
             model_config=granite_config,

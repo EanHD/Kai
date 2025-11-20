@@ -7,7 +7,7 @@ services:
       dockerfile: docker/Dockerfile
     container_name: kai-api
     ports:
-      - "8000:8000"
+      - "9000:9000"
     environment:
       - OPENROUTER_API_KEY=${OPENROUTER_API_KEY}
       - BRAVE_API_KEY=${BRAVE_API_KEY:-}

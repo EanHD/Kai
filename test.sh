@@ -61,13 +61,31 @@ RUN_STRESS=1
 FAIL_FAST=""
 COST_REPORT=0
 
+# Function to show usage
+show_usage() {
+    echo "Usage: ./test.sh [OPTIONS]"
+    echo ""
+    echo "Options:"
+    echo "  --quick          Run only static + unit + integration (skip production/stress)"
+    echo "  --production     Run only production validation suite"
+    echo "  --regression     Run only regression tests"
+    echo "  --stress         Run only stress tests"
+    echo "  --no-static      Skip static analysis"
+    echo "  --cost-report    Show detailed cost breakdown at end"
+    echo "  --fail-fast      Stop on first test failure"
+    echo "  --help           Show this help message"
+}
+
 # Parse arguments
 while [[ $# -gt 0 ]]; do
     case $1 in
         --quick)
-            RUN_PRODUCTION=0
-            RUN_STRESS=0
+            QUICK_MODE=true
             shift
+            ;;
+        --help)
+            show_usage
+            exit 0
             ;;
         --production)
             RUN_STATIC=0
