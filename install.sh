@@ -75,18 +75,38 @@ ollama pull granite4:micro-h
 
 # 4. Configuration
 echo "⚙️  Checking configuration..."
+
+# Generate Encryption Key
+GEN_KEY=$(python3 -c "import secrets; print(secrets.token_hex(32))")
+
 if [ ! -f .env ]; then
     echo "⚠️  .env file missing. Creating from template..."
-    if [ -f .env.example ]; then
-        cp .env.example .env
+    if [ -f .env.template ]; then
+        cp .env.template .env
+        # Replace placeholder with generated key
+        if [[ "$OSTYPE" == "darwin"* ]]; then
+            sed -i '' "s/ENCRYPTION_KEY=generate_secure_key_here/ENCRYPTION_KEY=$GEN_KEY/" .env
+        else
+            sed -i "s/ENCRYPTION_KEY=generate_secure_key_here/ENCRYPTION_KEY=$GEN_KEY/" .env
+        fi
     else
         touch .env
         echo "# Kai Environment Variables" >> .env
         echo "OPENROUTER_API_KEY=" >> .env
         echo "BRAVE_API_KEY=" >> .env
         echo "TAVILY_API_KEY=" >> .env
+        echo "ENCRYPTION_KEY=$GEN_KEY" >> .env
     fi
     echo "❗ Please edit .env and add your API keys."
+else
+    # Check if ENCRYPTION_KEY exists in .env
+    if ! grep -q "ENCRYPTION_KEY" .env; then
+        echo "⚠️  ENCRYPTION_KEY missing in .env. Appending..."
+        echo "" >> .env
+        echo "# Security" >> .env
+        echo "ENCRYPTION_KEY=$GEN_KEY" >> .env
+        echo "✅ Added new encryption key to .env"
+    fi
 fi
 
 echo "✅ Setup Complete! Run './dev.sh' to start the server."
