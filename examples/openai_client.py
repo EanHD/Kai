@@ -23,7 +23,7 @@ def example_chat_completion():
     print("-" * 60)
 
     response = client.chat.completions.create(
-        model="granite-local",  # Uses local Ollama
+        model="qwen-local",  # Uses local Ollama (Qwen2.5 3B)
         messages=[
             {"role": "system", "content": "You are a helpful assistant."},
             {"role": "user", "content": "What is the capital of France?"},
@@ -43,9 +43,9 @@ def example_streaming():
     print("-" * 60)
 
     stream = client.chat.completions.create(
-        model="granite-local",
+        model=\"qwen-local\",
         messages=[
-            {"role": "user", "content": "Count from 1 to 5."},
+            {\"role\": \"user\", \"content\": \"Count from 1 to 5.\"},
         ],
         stream=True,
     )
@@ -96,7 +96,7 @@ def example_with_tools():
     ]
 
     response = client.chat.completions.create(
-        model="granite-local",
+        model=\"qwen-local\",
         messages=[
             {"role": "user", "content": "What's the weather in Paris?"},
         ],

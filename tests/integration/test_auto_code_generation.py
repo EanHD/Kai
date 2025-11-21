@@ -54,7 +54,7 @@ async def test_auto_code_generation_robot_problem(mock_code_executor):
             content="Based on the calculation, there are 16 different combinations.",
             token_count=15,
             cost=0.0,
-            model_used="granite4:micro-h",
+            model_used="qwen2.5:3b-instruct-q5_K_M",
             finish_reason="stop",
             metadata={},
         )
@@ -140,7 +140,7 @@ async def test_auto_code_generation_arithmetic():
             content="The result is 1,376,356.",
             token_count=10,
             cost=0.0,
-            model_used="granite4:micro-h",
+            model_used="qwen2.5:3b-instruct-q5_K_M",
             finish_reason="stop",
             metadata={},
         )
@@ -197,7 +197,7 @@ async def test_no_auto_generation_for_non_computational():
             content="Python is a high-level programming language.",
             token_count=12,
             cost=0.0,
-            model_used="granite4:micro-h",
+            model_used="qwen2.5:3b-instruct-q5_K_M",
             finish_reason="stop",
             metadata={},
         )

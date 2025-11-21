@@ -91,7 +91,7 @@ def test_ollama_provider_handles_dict_messages():
 
     model_config = {
         "model_id": "test",
-        "model_name": "granite4:micro-h",
+        "model_name": "qwen2.5:3b-instruct-q5_K_M",
         "provider": "ollama",
         "capabilities": [],
         "context_window": 8000,
@@ -102,7 +102,7 @@ def test_ollama_provider_handles_dict_messages():
 
     # Verify provider was created successfully with dict messages
     assert provider is not None
-    assert provider.model_name == "granite4:micro-h"
+    assert provider.model_name == "qwen2.5:3b-instruct-q5_K_M"
 
 
 # ============================================================================
@@ -163,7 +163,7 @@ def test_cli_health_check_key():
 
 
 def test_granite_model_name_format():
-    """BUG #6: Config had granite4-micro but Ollama expects granite4:micro-h.
+    """BUG #6: Config had qwen-3b but Ollama expects qwen2.5:3b-instruct-q5_K_M.
 
     Fixed: Updated test config to use correct format.
     Regression: Model names should use colon format for Ollama.
@@ -178,7 +178,7 @@ def test_granite_model_name_format():
 
     # Should use colon format
     assert ":" in granite_model, (
-        f"Granite model should use 'granite4:micro-h' format, got: {granite_model}"
+        f"Qwen model should use 'qwen2.5:3b-instruct-q5_K_M' format, got: {granite_model}"
     )
     assert "granite4" in granite_model.lower()
 

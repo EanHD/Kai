@@ -28,35 +28,23 @@
 # - active: Set to false to disable without deleting config
 
 models:
-  # Local Model (Ollama) - SmolLM2 1.7B (Primary)
-  # Best for: Fast narration, summarization, and simple queries on low-VRAM GPUs (GTX 1650)
-  - model_id: smollm2-1.7b
-    model_name: smollm2:1.7b  # Run: ollama pull smollm2:1.7b
+  # Local Model (Ollama) - Qwen2.5 3B Instruct (Primary)
+  # Best for: Fast, high-quality responses on consumer GPUs. Superior to SmolLM/Granite for conversation.
+  - model_id: qwen-3b-instruct
+    model_name: qwen2.5:3b-instruct-q5_K_M  # Run: ollama pull qwen2.5:3b-instruct-q5_K_M
     provider: ollama
     capabilities:
       - chat
       - function_calling
-    context_window: 8192  # Standard context
+      - simple_reasoning
+      - grok_voice
+    context_window: 32768  # 32k context
     cost_per_1k_input: 0.0
     cost_per_1k_output: 0.0
     routing_priority: 10  # FREE - primary local model
     is_local: true
     active: true
-
-  # Local Model (Ollama) - Granite 4 Micro (Secondary)
-  # Best for: Slightly more complex local tasks if VRAM permits
-  - model_id: granite4-micro
-    model_name: granite4:micro-h  # Run: ollama pull granite4:micro-h
-    provider: ollama
-    capabilities:
-      - chat
-      - function_calling
-    context_window: 2000000  # 2M tokens!
-    cost_per_1k_input: 0.0
-    cost_per_1k_output: 0.0
-    routing_priority: 9  # FREE - secondary local model
-    is_local: true
-    active: true
+    is_default: true
 
   # Local Model - Llama 3.2 3B (Fallback)
   # Best for: Alternative when granite4 has issues

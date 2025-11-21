@@ -38,7 +38,7 @@ async def stress_test_orchestrator():
     # Local model
     granite_config = {
         "model_id": "granite-stress",
-        "model_name": "granite4:micro-h",
+        "model_name": "qwen2.5:3b-instruct-q5_K_M",
         "provider": "ollama",
         "context_window": 4000,
     }
@@ -344,7 +344,7 @@ class TestCostExhaustion:
         # Create orchestrator with tiny limit
         granite_config = {
             "model_id": "granite-stress",
-            "model_name": "granite4:micro-h",
+            "model_name": "qwen2.5:3b-instruct-q5_K_M",
             "provider": "ollama",
             "cost_per_1k_input": 0.1,  # High cost to hit limit fast
             "cost_per_1k_output": 0.1,

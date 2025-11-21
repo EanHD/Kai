@@ -71,7 +71,7 @@ def test_chat_completion_validation_no_messages(client):
     response = client.post(
         "/v1/chat/completions",
         json={
-            "model": "granite-local",
+            "model": "qwen-local",
             "messages": [],
         },
     )
@@ -83,7 +83,7 @@ def test_chat_completion_validation_no_user_message(client):
     response = client.post(
         "/v1/chat/completions",
         json={
-            "model": "granite-local",
+            "model": "qwen-local",
             "messages": [{"role": "system", "content": "You are helpful"}],
         },
     )
@@ -118,7 +118,7 @@ def test_chat_completion_happy_path(client, mock_orchestrator):
         response = client.post(
             "/v1/chat/completions",
             json={
-                "model": "granite-local",
+                "model": "qwen-local",
                 "messages": [{"role": "user", "content": "Hello, how are you?"}],
                 "temperature": 0.7,
             },
@@ -166,7 +166,7 @@ def test_chat_completion_streaming_format(client):
     response = client.post(
         "/v1/chat/completions",
         json={
-            "model": "granite-local",
+            "model": "qwen-local",
             "messages": [{"role": "user", "content": "Say hello"}],
             "stream": True,
         },
@@ -198,7 +198,7 @@ def test_chat_completion_with_system_message(client):
     response = client.post(
         "/v1/chat/completions",
         json={
-            "model": "granite-local",
+            "model": "qwen-local",
             "messages": [
                 {"role": "system", "content": "You are a helpful assistant."},
                 {"role": "user", "content": "Hello"},
@@ -216,7 +216,7 @@ def test_chat_completion_temperature_validation(client):
     response = client.post(
         "/v1/chat/completions",
         json={
-            "model": "granite-local",
+            "model": "qwen-local",
             "messages": [{"role": "user", "content": "Hi"}],
             "temperature": 1.0,
         },
@@ -227,7 +227,7 @@ def test_chat_completion_temperature_validation(client):
     response = client.post(
         "/v1/chat/completions",
         json={
-            "model": "granite-local",
+            "model": "qwen-local",
             "messages": [{"role": "user", "content": "Hi"}],
             "temperature": 3.0,
         },

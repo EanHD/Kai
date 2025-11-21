@@ -139,7 +139,7 @@ class ConfigLoader:
             ),
             # Roles
             "planner_model": os.getenv("PLANNER_MODEL", "openai/gpt-oss-20b"),
-            "narrator_model": os.getenv("NARRATOR_MODEL", "smollm2:1.7b"),
+            "narrator_model": os.getenv("NARRATOR_MODEL", "qwen2.5:3b-instruct-q5_K_M"),
         }
 
         # Validate required keys

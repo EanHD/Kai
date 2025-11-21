@@ -67,7 +67,7 @@ class APIConfig:
                     "model": "granite4:tiny-h",
                 },
             },
-            "default_model": "granite-local",
+            "default_model": "qwen-local",
             "cors": {
                 "enabled": True,
                 "allow_origins": ["*"],
@@ -126,7 +126,7 @@ class APIConfig:
         Returns:
             Default model name
         """
-        return self.get("default_model", "granite-local")
+        return self.get("default_model", "qwen-local")
 
     def list_available_models(self) -> list[str]:
         """Get list of all available model names.
