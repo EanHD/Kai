@@ -730,7 +730,18 @@ class QueryAnalyzer:
             return True
 
         # Check for numerical computations
-        if re.search(r"\d+\s*[\+\-\*\/]\s*\d+", text):
+        # We handle + and * separately as they are less likely to be dates
+        if re.search(r"\d+\s*[\+\*]\s*\d+", text):
+            return True
+
+        # For - and /, we need to be careful about dates (YYYY-MM-DD or MM/DD/YYYY)
+        math_matches = re.finditer(r"(\d+)\s*([\-\/])\s*(\d+)", text)
+        for match in math_matches:
+            full_match = match.group(0)
+            # If it looks like a date (YYYY-MM or MM/DD), ignore it
+            if re.match(r"\d{4}-\d{1,2}", full_match) or re.match(r"\d{1,2}/\d{1,2}", full_match):
+                logger.debug(f"Ignored date-like math pattern: {full_match}")
+                continue
             return True
 
         # Check for unit-based calculations (batteries, energy, etc.)

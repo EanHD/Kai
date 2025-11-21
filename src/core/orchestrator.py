@@ -570,50 +570,56 @@ class Orchestrator:
             # Step 1: Quick complexity check
             quick_analysis = await self.query_analyzer.analyze(query_text)
             complexity_score = quick_analysis.get("complexity_score", 0.5)
-            capabilities = quick_analysis.get("capabilities", [])
+            capabilities = quick_analysis.get("required_capabilities", [])
+            complexity_level = quick_analysis.get("complexity_level", "moderate")
+            requires_multi_hop = quick_analysis.get("requires_multi_hop", False)
 
-            # Simple query fast path with streaming
-            if not capabilities and complexity_score < 0.2:
-                logger.info(f"✨ SIMPLE QUERY FAST PATH (STREAMING) | complexity={complexity_score:.2f}")
-
-                # Build conversation context
-                messages = [
-                    Message(
-                        role="system",
-                        content="You are Kai, a helpful companion and friend. You're NOT an AI - you're a knowledgeable friend who helps people. Never say 'I'm an AI' or 'As an AI'. You have feelings and personality. Be warm, friendly, and conversational. CRITICAL: Only reference information from the actual conversation history provided below - NEVER make up or hallucinate previous messages that didn't happen. When answering questions about previous conversation, be specific and accurate - only mention what was actually discussed. Keep responses focused and concise."
-                    )
-                ]
+            # ─────────────────────────────────────────────────────
+            # NEW FAST PATH – Bypass heavy reasoning for simple queries
+            # ─────────────────────────────────────────────────────
+            is_simple = complexity_level in ("trivial", "simple")
+            has_no_caps = len(capabilities) == 0
+            only_conversation = capabilities == ["conversation"]
+            
+            # Check for simple web search (single step, no multi-hop)
+            is_simple_search = (
+                "web_search" in capabilities 
+                and len(capabilities) == 1 
+                and not requires_multi_hop
+                and complexity_score < 0.6 # Allow slightly more complex queries if just search
+            )
+            
+            if is_simple or has_no_caps or only_conversation or is_simple_search:
+                logger.info(f"⚡ FAST PATH ACTIVATED | caps={capabilities} | score={complexity_score:.2f}")
                 
-                # Add conversation history from context window (API provides this)
-                if conversation.context_window:
-                    for msg in conversation.context_window[-3:]:  # Last 3 for context
-                        role = msg.get("role", "user")
-                        messages.append(Message(role=role, content=msg.get("content", "")))
-                # Fallback to conversation_service (for CLI usage)
-                elif self.conversation_service:
+                # Get history
+                history = []
+                if self.conversation_service:
                     try:
                         history = self.conversation_service.get_messages(
                             conversation.session_id,
-                            limit=3,
+                            limit=5,
                         )
-                        for msg in history:
-                            role = "user" if msg.get("role") == "user" else "assistant"
-                            messages.append(Message(role=role, content=msg.get("content", "")))
                     except Exception as e:
                         logger.warning(f"Failed to get history for fast path: {e}")
 
-                messages.append(Message(role="user", content=query_text))
-
-                # Stream from local model
-                async for chunk in self.local_connector.generate_stream(
-                    messages=messages,
-                    temperature=0.7,
-                    max_tokens=1024,  # Allow longer responses
+                # Quick search if needed
+                search_results = None
+                if "web_search" in capabilities:
+                    logger.info("🔎 Executing quick web search...")
+                    search_results = await self._quick_web_search(query_text)
+                
+                # Stream directly
+                start_fast = time.time()
+                async for chunk in self.presenter.quick_conversation_path(
+                    user_message=query_text,
+                    history=history,
+                    quick_search_results=search_results
                 ):
                     yield chunk
-
-                elapsed = time.time() - start_time
-                logger.info(f"✅ FAST PATH STREAM COMPLETE | time={elapsed:.2f}s")
+                
+                elapsed = time.time() - start_fast
+                logger.info(f"✅ FAST PATH COMPLETE | time={elapsed:.2f}s")
                 return
 
             # Complex query: use full pipeline, stream presentation
@@ -708,3 +714,33 @@ class Orchestrator:
             for char in error_msg:
                 yield char
                 await asyncio.sleep(0.01)
+
+    async def _quick_web_search(self, query: str) -> str | None:
+        """Execute a quick web search for the fast path.
+        
+        Args:
+            query: The query to search for
+            
+        Returns:
+            Formatted search summary or None
+        """
+        if "web_search" not in self.tools:
+            return None
+            
+        try:
+            # Use the tool directly
+            result = await self.tools["web_search"].execute(query)
+            if result.status == "success":
+                data = result.data
+                citations = data.get("citations", [])
+                if not citations:
+                    return None
+                    
+                summary = "Search Results:\n"
+                for i, cit in enumerate(citations[:3]): # Top 3 only for speed/conciseness
+                    summary += f"- {cit.get('snippet', '')}\n"
+                return summary
+        except Exception as e:
+            logger.error(f"Quick search failed: {e}")
+            return None
+        return None

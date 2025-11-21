@@ -450,3 +450,50 @@ class GranitePresenter:
                 "used_search_fallback": bool(citations),
             },
         )
+
+    async def quick_conversation_path(
+        self,
+        user_message: str,
+        history: list[dict[str, Any]],
+        quick_search_results: str | None = None,
+    ):
+        """Fast path for simple conversation.
+        
+        Args:
+            user_message: The user's current message
+            history: Conversation history
+            quick_search_results: Optional results from a quick web search
+            
+        Yields:
+            Streamed response tokens
+        """
+        system_prompt = """You are Kai, a warm, slightly sarcastic friend who sounds like a real person.
+Never lecture. Keep answers short unless the user is clearly going deep.
+Use contractions. Ask follow-up questions when it makes sense.
+Never say "As an AI". If unsure, say "not sure, let me think..." """
+
+        messages = [Message(role="system", content=system_prompt)]
+        
+        # Add history
+        for msg in history:
+            role = msg.get("role", "user")
+            content = msg.get("content", "")
+            messages.append(Message(role=role, content=content))
+            
+        # Add current message with optional search context
+        content = user_message
+        if quick_search_results:
+            content += f"\n\nContext from quick search:\n{quick_search_results}"
+            
+        messages.append(Message(role="user", content=content))
+        
+        try:
+            async for chunk in self.connector.generate_stream(
+                messages=messages,
+                temperature=0.7,
+                max_tokens=1024
+            ):
+                yield chunk
+        except Exception as e:
+            logger.error(f"Quick conversation path failed: {e}")
+            yield "I'm having a bit of trouble thinking right now. Can you ask that again?"
