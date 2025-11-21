@@ -298,6 +298,59 @@ class QueryAnalyzer:
         "must be accurate",
     ]
 
+    # Intent tag keywords for routing
+    PLANNING_KEYWORDS = [
+        "plan",
+        "strategy",
+        "roadmap",
+        "approach",
+        "steps to",
+        "how should i",
+        "help me think",
+        "help me figure out",
+    ]
+
+    DEEP_REASONING_KEYWORDS = [
+        "why does",
+        "explain why",
+        "how does",
+        "what makes",
+        "underlying",
+        "fundamental",
+        "philosophy",
+        "theory behind",
+    ]
+
+    CREATIVE_KEYWORDS = [
+        "create",
+        "generate",
+        "write",
+        "compose",
+        "design",
+        "brainstorm",
+        "imagine",
+        "innovative",
+    ]
+
+    ANALOGY_KEYWORDS = [
+        "like",
+        "similar to",
+        "analogy",
+        "metaphor",
+        "compare to",
+        "reminds me of",
+    ]
+
+    CRITICAL_KEYWORDS = [
+        "critical",
+        "crucial",
+        "vital",
+        "essential",
+        "life or death",
+        "mission critical",
+        "must be perfect",
+    ]
+
     def detect_topic_shift(
         self,
         current_query: str,
@@ -406,7 +459,7 @@ class QueryAnalyzer:
             previous_topic_embedding: Previous conversation topic embedding for shift detection
 
         Returns:
-            Analysis dict with complexity, capabilities, complexity_score, topic_shift, etc.
+            Analysis dict with complexity, capabilities, complexity_score, topic_shift, intent_tags, etc.
         """
         # Detect topic shift (always do this if embeddings available)
         topic_shift, current_embedding = self.detect_topic_shift(
@@ -433,6 +486,10 @@ class QueryAnalyzer:
                     # Merge topic shift info
                     llm_result["topic_shift"] = topic_shift
                     llm_result["current_topic_embedding"] = current_embedding
+                    
+                    # Add intent tags from regex
+                    llm_result["intent_tags"] = regex_result.get("intent_tags", [])
+                    
                     return llm_result
             except Exception as e:
                 logger.error(f"LLM analysis failed, falling back to regex: {e}")
@@ -532,6 +589,9 @@ class QueryAnalyzer:
         if self._needs_memory_retrieval(text_lower):
             capabilities.append("rag")
 
+        # Detect intent tags for routing
+        intent_tags = self._detect_intent_tags(text_lower)
+
         # Determine complexity and score
         complexity = self._determine_complexity(text_lower, capabilities)
         complexity_score = self._calculate_complexity_score(text_lower, capabilities)
@@ -557,7 +617,49 @@ class QueryAnalyzer:
             "topic_shift": topic_shift,
             "current_topic_embedding": current_embedding,
             "memory_operation": memory_operation,  # "store" | "retrieve" | None
+            "intent_tags": intent_tags,  # NEW: for routing decisions
         }
+
+    def _detect_intent_tags(self, text: str) -> list[str]:
+        """Detect intent tags from query text.
+        
+        Args:
+            text: Lowercase query text
+            
+        Returns:
+            List of intent tags
+        """
+        tags = []
+        
+        # Planning/Strategy
+        if any(kw in text for kw in self.PLANNING_KEYWORDS):
+            tags.append("planning")
+        if "strategy" in text or "strategic" in text:
+            tags.append("strategy")
+        if "help me think" in text or "help me figure" in text:
+            tags.append("thinking")
+            
+        # Deep Reasoning
+        if any(kw in text for kw in self.DEEP_REASONING_KEYWORDS):
+            tags.append("deep_reasoning")
+            
+        # Creative
+        if any(kw in text for kw in self.CREATIVE_KEYWORDS):
+            tags.append("creative")
+            
+        # Analogy
+        if any(kw in text for kw in self.ANALOGY_KEYWORDS):
+            tags.append("analogy")
+            
+        # Critical
+        if any(kw in text for kw in self.CRITICAL_KEYWORDS):
+            tags.append("critical")
+            
+        # Complex Analysis
+        if any(kw in text for kw in self.COMPLEX_KEYWORDS):
+            tags.append("complex_analysis")
+            
+        return tags
 
     def _needs_web_search(self, text: str) -> bool:
         """Check if query needs web search (explicit or implicit).
