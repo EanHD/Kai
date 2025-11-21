@@ -133,10 +133,12 @@ class ReasoningEngine:
             # Attempt repair via LLM
             try:
                 repair_prompt = f"""
-                The following JSON is invalid. Please fix it and return ONLY the valid JSON.
+                The following text contains a JSON object but it is invalid or malformed.
+                Please extract or fix the JSON and return ONLY the valid JSON object.
+                Do not add any markdown formatting or explanations.
                 
-                INVALID JSON:
-                {content}
+                INVALID TEXT:
+                {content[:4000]}
                 """
                 
                 repair_messages = [
@@ -166,19 +168,76 @@ class ReasoningEngine:
             except Exception as e:
                 logger.error(f"JSON repair failed: {e}")
                 logger.error(f"Original failed content: {response.content}")
-                raise ValueError("Reasoner failed to produce valid JSON")
+                # Fallback: Create a valid KnowledgeObject from the raw content
+                logger.info("Creating fallback KnowledgeObject from raw content")
+                data = {
+                    "query": query,
+                    "summary": "I analyzed the information but couldn't structure it perfectly. Here are the details.",
+                    "detailed_points": [
+                        {
+                            "title": "Analysis Results",
+                            "body": content[:10000],  # Use the raw content as the body
+                            "importance": "medium",
+                            "citations": []
+                        }
+                    ],
+                    "confidence": 0.5,
+                    "limitations": ["Response structure was malformed, falling back to raw text"],
+                    "kind": "explanation"
+                }
 
         if isinstance(data, list):
             if len(data) > 0 and isinstance(data[0], dict):
                 data = data[0]
             else:
-                raise ValueError("Reasoner returned a list, expected a dictionary")
+                # Fallback for list output
+                logger.warning("Reasoner returned a list, using fallback")
+                data = {
+                    "query": query,
+                    "summary": "Analysis returned a list instead of an object.",
+                    "detailed_points": [
+                        {
+                            "title": "Analysis Results",
+                            "body": str(data)[:10000],
+                            "importance": "medium",
+                            "citations": []
+                        }
+                    ],
+                    "confidence": 0.5,
+                    "kind": "explanation"
+                }
 
         try:
             # Ensure required fields are present or set defaults if missing
             # The LLM might miss some optional fields, Pydantic will handle validation
+            
+            # Fill in missing required fields if they are missing from the data
+            if "query" not in data:
+                data["query"] = query
+            if "summary" not in data:
+                data["summary"] = "Analysis completed."
+            if "detailed_points" not in data:
+                data["detailed_points"] = []
+            if "confidence" not in data:
+                data["confidence"] = 0.5
+                
             ko = KnowledgeObject(**data)
             return ko
         except Exception as e:
             logger.error(f"Validation failed for Reasoner output: {e}")
-            raise ValueError(f"Reasoner output did not match schema: {e}")
+            # Final fallback if even the constructed data is invalid
+            return KnowledgeObject(
+                query=query,
+                summary="An error occurred while structuring the analysis.",
+                detailed_points=[
+                    {
+                        "title": "Raw Output",
+                        "body": str(content)[:10000],
+                        "importance": "medium",
+                        "citations": []
+                    }
+                ],
+                confidence=0.1,
+                limitations=["Validation failed"],
+                kind="debug"
+            )
