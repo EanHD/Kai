@@ -314,6 +314,7 @@ from src.api.handlers.models import list_models
 from src.api.handlers.health import check_health
 from src.api.handlers.memory_import import router as memory_router
 from src.api.handlers.rage_feedback import router as rage_router
+from src.api.handlers.tts import router as tts_router
 from src.api.models.chat import ChatCompletionRequest
 from src.api.models.errors import invalid_request_error, server_error
 from src.api.adapter import OrchestratorAdapter
@@ -324,6 +325,7 @@ from sse_starlette.sse import EventSourceResponse
 # Include routers
 app.include_router(memory_router)
 app.include_router(rage_router)
+app.include_router(tts_router)
 
 
 # Chat completions endpoint
