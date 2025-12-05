@@ -140,6 +140,22 @@ async def lifespan(app: FastAPI):
         except Exception as e:
             logger.error(f"Failed to initialize WebSearchTool: {e}")
     
+    # Initialize memory vault and reflection agent BEFORE orchestrator
+    memory_vault = None
+    reflection_agent = None
+    rage_trainer = None
+    if primary_local_connector:
+        # Use a system user ID for API server reflections
+        memory_vault = MemoryVault(user_id="api_server")
+        reflection_agent = ReflectionAgent(primary_local_connector, memory_vault)
+        rage_trainer = RageTrainer(memory_vault)
+        app.state.memory_vault = memory_vault
+        app.state.reflection_agent = reflection_agent
+        app.state.rage_trainer = rage_trainer
+        logger.info("Reflection agent initialized - continuous learning enabled")
+    else:
+        logger.warning("No local connector - reflection disabled for API server")
+
     # Initialize orchestrator
     orchestrator = Orchestrator(
         local_connector=primary_local_connector,
@@ -162,22 +178,6 @@ async def lifespan(app: FastAPI):
     app.state.conversation_service = conversation_service
 
     app.state.orchestrator = orchestrator
-
-    # Initialize reflection agent for continuous learning (always-on)
-    memory_vault = None
-    reflection_agent = None
-    rage_trainer = None
-    if primary_local_connector:
-        # Use a system user ID for API server reflections
-        memory_vault = MemoryVault(user_id="api_server")
-        reflection_agent = ReflectionAgent(primary_local_connector, memory_vault)
-        rage_trainer = RageTrainer(memory_vault)
-        app.state.memory_vault = memory_vault
-        app.state.reflection_agent = reflection_agent
-        app.state.rage_trainer = rage_trainer
-        logger.info("Reflection agent initialized - continuous learning enabled")
-    else:
-        logger.warning("No local connector - reflection disabled for API server")
 
     logger.info("Orchestrator initialized successfully")
 
