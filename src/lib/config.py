@@ -139,7 +139,7 @@ class ConfigLoader:
             ),
             # Roles
             "planner_model": os.getenv("PLANNER_MODEL", "openai/gpt-oss-20b"),
-            "narrator_model": os.getenv("NARRATOR_MODEL", "qwen2.5:3b-instruct-q5_K_M"),
+            "narrator_model": os.getenv("NARRATOR_MODEL", "qwen-3b-instruct"),
             # Cost Controls
             "monthly_cost_cap": float(os.getenv("MONTHLY_COST_CAP", "3.0")),
             "soft_cap_threshold": float(os.getenv("SOFT_CAP_THRESHOLD", "0.8")),
