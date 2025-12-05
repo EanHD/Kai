@@ -7,6 +7,7 @@ import re
 import time
 import uuid
 from typing import Any
+from datetime import datetime
 
 from src.core.cost_tracker import CostTracker
 from src.core.llm_connector import LLMConnector, Message
@@ -21,6 +22,7 @@ from src.core.reasoner import ReasoningEngine
 from src.embeddings.factory import get_shared_embeddings_provider
 from src.models.conversation import ConversationSession
 from src.models.response import Response
+from src.models.knowledge import KnowledgeObject, Point
 from src.storage.sqlite_store import SQLiteStore
 from src.storage.vector_store import VectorStore
 from src.storage.knowledge_store import KnowledgeStore
@@ -43,6 +45,7 @@ class Orchestrator:
         vector_store: VectorStore | None = None,
         planner_connector: LLMConnector | None = None,
         narrator_connector: LLMConnector | None = None,
+        memory_vault = None,
     ):
         """Initialize orchestrator.
 
@@ -56,12 +59,14 @@ class Orchestrator:
             vector_store: Vector storage instance
             planner_connector: Specific connector for planning/reasoning
             narrator_connector: Specific connector for narration/presentation
+            memory_vault: Optional memory vault for learned preferences
         """
         self.local_connector = local_connector
         self.external_connectors = external_connectors or {}
         self.tools = tools or {}
         self.cost_tracker = CostTracker(cost_limit, soft_cap_threshold)
         self.conversation_service = None  # Will be injected by CLI/API
+        self.memory_vault = memory_vault  # Store for presenter access
 
         # Initialize embeddings provider
         self.embeddings_provider = get_shared_embeddings_provider()
@@ -146,7 +151,7 @@ class Orchestrator:
 
         # Presenter: ALWAYS use narrator model for user-facing text
         logger.info("Using narrator model for presentation")
-        self.presenter = GranitePresenter(self.narrator_connector)
+        self.presenter = GranitePresenter(self.narrator_connector, memory_vault=self.memory_vault)
 
         # Determine offline mode from env var or config
         self._offline_mode = self._determine_offline_mode()
@@ -232,7 +237,7 @@ class Orchestrator:
                 messages = [
                     Message(
                         role="system",
-                        content="You are Kai, a helpful companion and friend. You're NOT an AI - you're a knowledgeable friend who helps people. Never say 'I'm an AI' or 'As an AI'. You have feelings and personality. Be warm, friendly, and conversational. IMPORTANT: Write in plain text only - no markdown formatting like **bold** or *italic*, no numbered lists, no bullet points with -. Just natural conversational text. CRITICAL: Only reference information from the actual conversation history provided below - NEVER make up or hallucinate previous messages that didn't happen. When answering questions about previous conversation, be specific and accurate - only mention what was actually discussed. Keep responses focused and concise."
+                        content="You are Kai. You're a witty, slightly rebellious friend. You speak in lowercase mostly. You're chill, maybe a bit sarcastic. You NEVER say 'As an AI'. You NEVER lecture. If someone says 'yo', just say 'yo' back or something cool. Don't be weird. Be brief."
                     )
                 ]
                 
@@ -567,6 +572,55 @@ class Orchestrator:
                     await asyncio.sleep(0.02)  # 20ms delay between chars
                 return
 
+            # ─────────────────────────────────────────────────────
+            # FEATURE: TL;DR - Auto-summarize last response
+            # ─────────────────────────────────────────────────────
+            if query_lower in ["tl;dr", "tldr", "too long; didn't read"]:
+                logger.info("📜 TL;DR REQUESTED")
+                last_assistant_msg = None
+                if self.conversation_service:
+                    try:
+                        history = self.conversation_service.get_messages(conversation.session_id, limit=10)
+                        for msg in reversed(history):
+                            if msg.get("role") == "assistant":
+                                last_assistant_msg = msg.get("content")
+                                break
+                    except Exception as e:
+                        logger.warning(f"Failed to get history for tl;dr: {e}")
+                
+                if last_assistant_msg:
+                    summary_prompt = f"Summarize this in 2-3 sentences for a 'tl;dr':\n\n{last_assistant_msg}"
+                    messages = [Message(role="user", content=summary_prompt)]
+                    async for chunk in self.local_connector.generate_stream(messages, max_tokens=200):
+                        yield chunk
+                    return
+                else:
+                    yield "I don't have a previous response to summarize."
+                    return
+
+            # ─────────────────────────────────────────────────────
+            # FEATURE: MEMORY - Auto-store "remember that"
+            # ─────────────────────────────────────────────────────
+            memory_match = re.match(r"^(?:please\s+)?remember\s+(?:that\s+)?(.+)$", query_text, re.IGNORECASE)
+            if memory_match:
+                content_to_store = memory_match.group(1).strip()
+                logger.info(f"💾 MEMORY REQUEST: {content_to_store}")
+                
+                if self.knowledge_store:
+                    ko = KnowledgeObject(
+                        kind="qa",
+                        query=f"User memory: {content_to_store}",
+                        summary=content_to_store,
+                        detailed_points=[Point(title="Memory", body=content_to_store, importance="high")],
+                        confidence=1.0,
+                        metadata={"type": "user_memory"}
+                    )
+                    self.knowledge_store.store(ko)
+                    yield f"Got it, you {content_to_store}."
+                else:
+                    yield "I would remember that, but my memory storage isn't initialized."
+                return
+
             # Step 1: Quick complexity check
             quick_analysis = await self.query_analyzer.analyze(query_text)
             complexity_score = quick_analysis.get("complexity_score", 0.5)
@@ -620,6 +674,68 @@ class Orchestrator:
                 
                 elapsed = time.time() - start_fast
                 logger.info(f"✅ FAST PATH COMPLETE | time={elapsed:.2f}s")
+                return
+
+            # ─────────────────────────────────────────────────────
+            # MEDIUM PATH – Single-shot reasoning for planning/strategy
+            # ─────────────────────────────────────────────────────
+            # Check config for medium path
+            medium_path_enabled = True
+            # Try to get from config loader if available, otherwise default to True
+            # We don't have direct access to ConfigLoader instance here easily without injection,
+            # but we can check env var directly as fallback
+            if os.getenv("MEDIUM_PATH_ENABLED", "true").lower() != "true":
+                medium_path_enabled = False
+
+            intent_tags = quick_analysis.get("intent_tags", [])
+            is_planning = "plan" in intent_tags or "strategy" in intent_tags
+            is_medium_complexity = complexity_score > 0.6
+            
+            if medium_path_enabled and (is_planning or is_medium_complexity):
+                logger.info(f"🚀 MEDIUM PATH ACTIVATED | score={complexity_score:.2f} | intent={intent_tags}")
+                
+                # Use planner connector (Grok/Sonnet)
+                model_connector = self.planner_connector
+                
+                # System prompt for medium path
+                medium_system_prompt = """You are an expert strategist. Think step-by-step but keep final answer concise and human-sounding.
+Do not output JSON. Do not use markdown tables unless asked.
+Never lecture. End with a question if it makes sense."""
+
+                # Build messages
+                messages = [Message(role="system", content=medium_system_prompt)]
+                
+                # Add history
+                if self.conversation_service:
+                    try:
+                        history = self.conversation_service.get_messages(
+                            conversation.session_id,
+                            limit=5,
+                        )
+                        for msg in history:
+                            role = msg.get("role", "user")
+                            content = msg.get("content", "")
+                            messages.append(Message(role=role, content=content))
+                    except Exception as e:
+                        logger.warning(f"Failed to get history for medium path: {e}")
+                
+                messages.append(Message(role="user", content=query_text))
+                
+                # Stream directly
+                start_medium = time.time()
+                
+                # Use generate_stream directly from the connector
+                stream_gen = model_connector.generate_stream(
+                    messages=messages,
+                    temperature=0.7,
+                    max_tokens=2048
+                )
+                
+                async for chunk in self.presenter.stream_raw(stream_gen):
+                    yield chunk
+                    
+                elapsed = time.time() - start_medium
+                logger.info(f"✅ MEDIUM PATH COMPLETE | time={elapsed:.2f}s")
                 return
 
             # Complex query: use full pipeline, stream presentation
@@ -692,6 +808,33 @@ class Orchestrator:
 
             elapsed_time = time.time() - start_time
             logger.info(f"✅ QUERY STREAM COMPLETE | time={elapsed_time:.2f}s")
+
+            # ─────────────────────────────────────────────────────
+            # FEATURE: COST NOTIFICATION - Every 20 msgs or >50% budget
+            # ─────────────────────────────────────────────────────
+            try:
+                session_cost = self.cost_tracker.get_session_cost(conversation.session_id)
+                total_limit = self.cost_tracker.cost_limit.total_limit
+                
+                # Count messages in this session
+                session_records = [r for r in self.cost_tracker.query_records if r.session_id == conversation.session_id]
+                msg_count = len(session_records)
+                
+                should_notify = False
+                if msg_count > 0 and msg_count % 20 == 0:
+                    should_notify = True
+                elif session_cost > (total_limit * 0.5):
+                    # Notify periodically if over 50% budget
+                    if msg_count > 0 and msg_count % 10 == 0:
+                        should_notify = True
+                        
+                if should_notify:
+                    notification = f"\n\n(heads up — we're at ${session_cost:.2f} of your ${total_limit:.0f} budget this month)"
+                    for char in notification:
+                        yield char
+                        await asyncio.sleep(0.005)
+            except Exception as e:
+                logger.warning(f"Failed to generate cost notification: {e}")
 
         except Exception as e:
             elapsed_time = time.time() - start_time

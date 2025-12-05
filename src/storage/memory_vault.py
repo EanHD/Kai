@@ -205,6 +205,8 @@ class MemoryVault:
     def prune(self) -> dict[str, int]:
         """Delete memories that have expired based on ttl_days and low-confidence heuristic.
 
+        NEVER prunes ChatGPT imports (confidence=1.0 with chatgpt_import tag).
+
         Returns a count of removed items per type.
         """
         removed: dict[str, int] = dict.fromkeys(MEMORY_TYPES, 0)
@@ -220,6 +222,14 @@ class MemoryVault:
                         obj = json.loads(line)
                     except json.JSONDecodeError:
                         continue
+                        
+                    # NEVER prune ChatGPT imports (sacred data)
+                    tags = obj.get("tags", [])
+                    is_chatgpt_import = "chatgpt_import" in tags
+                    if is_chatgpt_import:
+                        new_lines.append(json.dumps(obj, ensure_ascii=False))
+                        continue
+                        
                     ttl_days = obj.get("ttl_days")
                     created_at = obj.get("created_at")
                     conf = obj.get("confidence")

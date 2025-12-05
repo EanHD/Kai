@@ -20,6 +20,7 @@ from src.storage.sqlite_store import SQLiteStore
 from src.storage.vector_store import VectorStore
 from src.storage.memory_vault import MemoryVault
 from src.agents.reflection_agent import ReflectionAgent
+from src.feedback.rage_trainer import RageTrainer
 from src.core.providers.ollama_provider import OllamaProvider
 from src.core.providers.openrouter_provider import OpenRouterProvider
 from src.lib.config import ConfigLoader
@@ -150,6 +151,7 @@ async def lifespan(app: FastAPI):
         vector_store=vector_store,
         planner_connector=planner_connector,
         narrator_connector=narrator_connector,
+        memory_vault=memory_vault,
     )
 
     # Inject conversation service for memory (create simple conversation service for API)
@@ -164,12 +166,15 @@ async def lifespan(app: FastAPI):
     # Initialize reflection agent for continuous learning (always-on)
     memory_vault = None
     reflection_agent = None
+    rage_trainer = None
     if primary_local_connector:
         # Use a system user ID for API server reflections
         memory_vault = MemoryVault(user_id="api_server")
         reflection_agent = ReflectionAgent(primary_local_connector, memory_vault)
+        rage_trainer = RageTrainer(memory_vault)
         app.state.memory_vault = memory_vault
         app.state.reflection_agent = reflection_agent
+        app.state.rage_trainer = rage_trainer
         logger.info("Reflection agent initialized - continuous learning enabled")
     else:
         logger.warning("No local connector - reflection disabled for API server")
@@ -307,6 +312,8 @@ from src.api.handlers.chat import (
 )
 from src.api.handlers.models import list_models
 from src.api.handlers.health import check_health
+from src.api.handlers.memory_import import router as memory_router
+from src.api.handlers.rage_feedback import router as rage_router
 from src.api.models.chat import ChatCompletionRequest
 from src.api.models.errors import invalid_request_error, server_error
 from src.api.adapter import OrchestratorAdapter
@@ -314,19 +321,31 @@ from src.api.streaming import stream_openai_response
 from fastapi.responses import StreamingResponse
 from sse_starlette.sse import EventSourceResponse
 
+# Include routers
+app.include_router(memory_router)
+app.include_router(rage_router)
+
 
 # Chat completions endpoint
 @app.post("/v1/chat/completions")
-async def chat_completions(request: ChatCompletionRequest):
+async def chat_completions(request: ChatCompletionRequest, http_request: Request = None):
     """OpenAI-compatible chat completions endpoint.
 
     Supports both streaming and non-streaming requests.
+    Accepts X-Rage-Feedback header for instant learning.
     """
     try:
         # Get orchestrator and reflection components from app state
         orchestrator = app.state.orchestrator
         reflection_agent = getattr(app.state, "reflection_agent", None)
         memory_vault = getattr(app.state, "memory_vault", None)
+        rage_trainer = getattr(app.state, "rage_trainer", None)
+
+        # Check for rage feedback header
+        if http_request and rage_trainer:
+            rage_emoji = http_request.headers.get("X-Rage-Feedback")
+            if rage_emoji in ["😭", "🤓", "💀"]:
+                await rage_trainer.record_reaction(rage_emoji)
 
         # Initialize orchestrator adapter with reflection support
         adapter = OrchestratorAdapter(

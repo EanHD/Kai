@@ -40,6 +40,8 @@ from src.tools.code_exec_wrapper import CodeExecWrapper
 from src.tools.memory_store import MemoryStoreTool
 from src.tools.sentiment_analyzer import SentimentAnalyzerTool
 from src.tools.web_search import WebSearchTool
+from src.tools.chatgpt_importer import ChatGPTImporter
+from src.feedback.rage_trainer import RageTrainer, format_weekly_message
 
 logger = logging.getLogger(__name__)
 
@@ -108,10 +110,14 @@ class CLI:
             tools=self.tools,
             cost_limit=cost_limit,
             soft_cap_threshold=soft_cap_threshold,
+            memory_vault=self.memory_vault,
         )
 
         # CRITICAL: Inject conversation service for context retention in fast path
         self.orchestrator.conversation_service = self.conversation_service
+
+        # Initialize rage trainer for instant feedback learning
+        self.rage_trainer = RageTrainer(self.memory_vault)
 
         # Initialize reflection agent (always enabled for continuous learning)
         self.reflection_agent = None
@@ -366,6 +372,8 @@ class CLI:
         print("=" * 50)
         print("Type 'quit' or 'exit' to end conversation")
         print("Type '/cost' to check spending")
+        print("React: 😭 (too long) 🤓 (nerdy) 💀 (bad tone)")
+        print("Commands: /regen, 'never', /reset")
         print("=" * 50)
         print()
 
@@ -387,6 +395,49 @@ class CLI:
 
                 if user_input.lower() == "/cost":
                     self._show_cost()
+                    continue
+
+                # Rage feedback reactions
+                if user_input in ["😭", "🤓", "💀"]:
+                    response_msg = await self.rage_trainer.record_reaction(user_input)
+                    print(f"\n💬 Kai: {response_msg}\n")
+                    continue
+
+                # Regen command
+                if user_input.lower() == "/regen":
+                    regen_ctx = await self.rage_trainer.handle_regen(force_external=False)
+                    if "error" in regen_ctx:
+                        print(f"\n⚠️  {regen_ctx['error']}\n")
+                        continue
+                    # Regenerate with anti-pattern context
+                    print("\n🔄 Regenerating...\n")
+                    user_input = f"{regen_ctx['instruction']}\n\nApply these rules:\n{regen_ctx['apply_rules']}"
+                    # Continue to normal processing
+
+                # Never command
+                if user_input.lower() == "never":
+                    print("\n💬 Kai: never do what again?\n")
+                    what = input("🗨️ You: ").strip()
+                    if what:
+                        response_msg = await self.rage_trainer.handle_never_command(what)
+                        print(f"\n💬 Kai: {response_msg}\n")
+                    continue
+
+                # Weekly summary command
+                if user_input.lower() == "/summary":
+                    summary = self.rage_trainer.get_weekly_summary()
+                    msg = format_weekly_message(summary)
+                    print(f"\n💬 Kai: {msg}\n")
+                    continue
+
+                # Nuclear reset command
+                if user_input.lower() == "/reset":
+                    confirm = input("⚠️  This will delete all learned preferences. Type 'yes' to confirm: ")
+                    if confirm.lower() == "yes":
+                        response_msg = await self.rage_trainer.nuclear_reset()
+                        print(f"\n💬 Kai: {response_msg}\n")
+                    else:
+                        print("\nCancelled.\n")
                     continue
 
                 # Memory commands
@@ -432,6 +483,10 @@ class CLI:
                         char_count += 1
 
                 print()  # Newline after streaming complete
+
+                # Capture response for rage feedback
+                full_response_text = "".join(full_content)
+                self.rage_trainer.capture_response(full_response_text)
 
                 # Create response object from streamed content
                 from src.models.response import Response
@@ -688,15 +743,44 @@ class CLI:
             return
         print("\n❓ Unknown memory command. Try /mem help\n")
 
+    async def import_chatgpt(self, file_path: str):
+        """Import ChatGPT history from file."""
+        if not self.local_connector:
+            print("❌ Error: Local model (Ollama) is required for import analysis.")
+            return
 
-async def main(debug: bool = False, show_reflection: bool = False):
+        print(f"\n🚀 Starting ChatGPT Import from {file_path}")
+        print("This will parse conversations and extract memories/preferences...")
+        
+        importer = ChatGPTImporter(self.memory_vault, self.local_connector)
+        stats = await importer.import_file(file_path)
+        
+        if "error" in stats:
+            print(f"\n❌ Import failed: {stats['error']}")
+        else:
+            print(f"\n✅ Import Complete!")
+            print(f"   - Conversations: {stats['conversations']}")
+            print(f"   - Episodes: {stats['episodes']}")
+            print(f"   - Semantic Memories: {stats['semantic']}")
+            print(f"   - Preferences: {stats['preferences']}")
+            print(f"   - Rules: {stats['rules']}")
+            print(f"\nKai now remembers {stats['conversations']} conversations of your chaos.")
+
+
+async def main(debug: bool = False, show_reflection: bool = False, import_chatgpt: str | None = None):
     """Main entry point.
 
     Args:
         debug: Enable debug mode with verbose logging
         show_reflection: Show detailed reflection output (reflection always runs in background)
+        import_chatgpt: Path to ChatGPT export file to import
     """
     cli = CLI(debug=debug, show_reflection=show_reflection)
+    
+    if import_chatgpt:
+        await cli.import_chatgpt(import_chatgpt)
+        return
+
     await cli.run()
 
 
@@ -719,6 +803,11 @@ if __name__ == "__main__":
         action="store_true",
         help="Show detailed reflection process (reflection always runs in background)",
     )
+    parser.add_argument(
+        "--import-chatgpt",
+        type=str,
+        help="Import ChatGPT history from conversations.json",
+    )
 
     args = parser.parse_args()
-    asyncio.run(main(debug=args.debug, show_reflection=args.reflect))
+    asyncio.run(main(debug=args.debug, show_reflection=args.reflect, import_chatgpt=args.import_chatgpt))

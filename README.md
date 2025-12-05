@@ -16,6 +16,7 @@
 - 🌐 **OpenAI-Compatible API**: Drop-in replacement for OpenAI API with full chat completions + streaming support
 - 🤖 **Intelligent Model Routing**: Automatically routes simple queries to fast local models and complex reasoning to powerful external models
 - 🧠 **Self-Improving Memory**: Reflection agent learns from past interactions, distills patterns, and evolves knowledge over time
+- 📥 **ChatGPT Import**: Import your entire ChatGPT history to instantly train Kai on your preferences and patterns — [Learn More →](docs/CHATGPT_IMPORT.md)
 - 🔍 **Web Search Integration**: Grounded information retrieval with DuckDuckGo and Ollama fallback
 - 🐍 **Auto-Code-Generation**: Automatically generates and executes Python code for computational queries (math, combinations, statistics)
 - 🧠 **Personal Memory**: RAG-based personal information storage with encryption

@@ -465,6 +465,33 @@ class QueryAnalyzer:
         topic_shift, current_embedding = self.detect_topic_shift(
             query_text, previous_topic_embedding
         )
+        
+        # HARD OVERRIDE: Check for greetings/casual chat FIRST to avoid LLM hallucinations
+        casual_patterns = [
+            r"^yo\b",
+            r"^hi\b",
+            r"^hello\b",
+            r"^hey\b",
+            r"^sup\b",
+            r"what'?s up",
+            r"how are you",
+        ]
+        if any(re.search(pattern, query_text.lower()) for pattern in casual_patterns):
+            # If it's just a greeting (short length), force simple
+            if len(query_text.split()) < 10:
+                logger.info("👋 Greeting detected - forcing simple/local path")
+                return {
+                    "complexity_level": "simple",
+                    "complexity_score": 0.0,
+                    "required_capabilities": [],
+                    "requires_multi_hop": False,
+                    "routing_decision": "local",
+                    "confidence": 1.0,
+                    "topic_shift": topic_shift,
+                    "current_topic_embedding": current_embedding,
+                    "memory_operation": None,
+                    "intent_tags": [],
+                }
 
         # Try LLM-based analysis first if connector is available
         if self.llm_connector:
@@ -751,6 +778,19 @@ class QueryAnalyzer:
         if any(re.search(pattern, text) for pattern in simple_factual_patterns):
             logger.debug("Simple factual query - using fast path, no web search")
             return False
+            
+        # Greetings and casual chat - definitely no web search
+        casual_patterns = [
+            r"^yo\b",
+            r"^hi\b",
+            r"^hello\b",
+            r"^hey\b",
+            r"^sup\b",
+            r"what'?s up",
+            r"how are you",
+        ]
+        if any(re.search(pattern, text) for pattern in casual_patterns):
+            return False
 
         # Factual "who/what/where/when" questions (likely need verification)
         factual_patterns = [
@@ -802,18 +842,6 @@ class QueryAnalyzer:
         workout_patterns = [
             r'\b(workout|exercise|train|fitness|gym)\b',
             r'\b(muscle|chest|back|legs|arms|abs|shoulders|bicep|tricep)\b',
-            r'\b(cardio|strength|endurance|flexibility)\b',
-        ]
-        if any(re.search(pattern, text) for pattern in workout_patterns):
-            # Unless there are explicit calculations
-            if not re.search(r'\d+\s*[\+\-\*\/x×÷]\s*\d+', text):
-                logger.debug("Workout/fitness query detected - NOT using code_exec")
-                return False
-        
-        # Exclude workout/exercise/fitness queries (not calculations)
-        workout_patterns = [
-            r'\b(workout|exercise|train|fitness|gym)\b',
-            r'\b(muscle|chest|back|legs|arms|abs)\b',
             r'\b(cardio|strength|endurance|flexibility)\b',
         ]
         if any(re.search(pattern, text) for pattern in workout_patterns):
@@ -903,6 +931,19 @@ class QueryAnalyzer:
         Returns:
             Complexity: simple, moderate, or complex
         """
+        # Explicit check for greetings/casual chat
+        casual_patterns = [
+            r"^yo\b",
+            r"^hi\b",
+            r"^hello\b",
+            r"^hey\b",
+            r"^sup\b",
+            r"what'?s up",
+            r"how are you",
+        ]
+        if any(re.search(pattern, text) for pattern in casual_patterns) and not capabilities:
+            return "simple"
+
         # Complex if needs code execution or 3+ tools
         if "code_exec" in capabilities or len(capabilities) >= 3:
             return "complex"

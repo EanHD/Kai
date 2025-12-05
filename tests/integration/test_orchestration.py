@@ -19,6 +19,15 @@ def mock_local_connector():
     """Create mock local connector (Granite)."""
     connector = AsyncMock(spec=LLMConnector)
 
+    # Mock query analyzer response
+    query_analysis_response = LLMResponse(
+        content='{"complexity_score": 0.1, "required_capabilities": [], "complexity_level": "simple", "routing_decision": "local"}',
+        token_count=50,
+        cost=0.0005,
+        model_used="granite",
+        finish_reason="stop",
+    )
+
     # Mock plan analyzer response (returns JSON plan)
     plan_response = LLMResponse(
         content='{"intent": "test", "complexity": "simple", "safety_level": "normal", "capabilities": [], "steps": [{"id": "finalize", "type": "finalization", "model": "granite", "description": "answer", "input": {}, "depends_on": [], "required": true}]}',
@@ -36,8 +45,22 @@ def mock_local_connector():
         model_used="granite",
         finish_reason="stop",
     )
+    
+    # Mock extra response for safety/fallback
+    extra_response = LLMResponse(
+        content='{"final_answer": "Extra response", "short_summary": "Test", "citations_used": []}',
+        token_count=10,
+        cost=0.0001,
+        model_used="granite",
+        finish_reason="stop",
+    )
 
-    connector.generate = AsyncMock(side_effect=[plan_response, presenter_response])
+    connector.generate = AsyncMock(side_effect=[query_analysis_response, plan_response, presenter_response, extra_response, extra_response])
+
+    async def mock_stream(*args, **kwargs):
+        yield "Test answer from orchestration"
+
+    connector.generate_stream = mock_stream
 
     return connector
 

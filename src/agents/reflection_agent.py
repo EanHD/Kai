@@ -187,6 +187,8 @@ class ReflectionAgent:
         - Updated prompt templates
         - Procedural checklists
 
+        Imported ChatGPT data is weighted 5× higher than normal episodes.
+
         Args:
             days_back: How many days to analyze
             min_episodes: Minimum episodes needed to run sweep
@@ -215,18 +217,34 @@ class ReflectionAgent:
                 return {"status": "skipped", "reason": "insufficient_data"}
 
             # Build summary of recent patterns
+            # WEIGHT CHATGPT IMPORTS 5× HIGHER
             summaries = []
+            weighted_summaries = []
+            
             for refl in reflections[:20]:  # Limit for context
                 payload = refl.get("payload", {})
                 summary = refl.get("summary", "")
                 learnings = payload.get("learnings", {})
+                tags = refl.get("tags", [])
+                
+                # Check if from ChatGPT import
+                is_chatgpt = "chatgpt_import" in tags
+                weight = 5 if is_chatgpt else 1
 
                 if learnings.get("rules"):
-                    summaries.append(f"Rules: {', '.join(learnings['rules'][:2])}")
+                    rule_text = f"Rules: {', '.join(learnings['rules'][:2])}"
+                    summaries.append(rule_text)
+                    # Add weighted copies for ChatGPT imports
+                    for _ in range(weight):
+                        weighted_summaries.append(rule_text)
+                        
                 if summary:
-                    summaries.append(f"- {summary}")
+                    summary_text = f"- {summary}"
+                    summaries.append(summary_text)
+                    for _ in range(weight):
+                        weighted_summaries.append(summary_text)
 
-            summary_text = "\n".join(summaries) if summaries else "No significant patterns"
+            summary_text = "\n".join(weighted_summaries) if weighted_summaries else "No significant patterns"
 
             # Generate distillation using LLM
             prompt_text = ReflectionPrompt.DISTILLATION_SWEEP.format(

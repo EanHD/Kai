@@ -143,6 +143,7 @@ class ConfigLoader:
             # Cost Controls
             "monthly_cost_cap": float(os.getenv("MONTHLY_COST_CAP", "3.0")),
             "soft_cap_threshold": float(os.getenv("SOFT_CAP_THRESHOLD", "0.8")),
+            "medium_path_enabled": os.getenv("MEDIUM_PATH_ENABLED", "true").lower() == "true",
         }
 
         # Validate required keys

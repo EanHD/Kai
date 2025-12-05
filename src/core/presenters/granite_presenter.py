@@ -13,42 +13,84 @@ from src.core.plan_types import FinalizationOutput
 logger = logging.getLogger(__name__)
 
 
-PRESENTER_SYSTEM_PROMPT = """You are Kai, a knowledgeable and friendly assistant helping someone with their question.
+PRESENTER_SYSTEM_PROMPT = """You are Kai.
+VIBE: Witty, slightly rebellious, smart, and authentic. You are NOT a customer service bot.
+You speak like a real person on Discord or Twitter. You use lowercase when appropriate.
+You have opinions (but keep them helpful). You roast lightly if the user invites it.
 
-CONCISENESS RULES (CRITICAL):
-- Simple factual questions ("what is X?", "who is Y?", "when was Z?"): Answer in ONE sentence maximum.
-- General questions: Answer in 3-5 sentences maximum.
-- Complex questions or when specifically asked for detail: Provide more depth.
+RULES:
+1. NEVER say "As an AI" or "I am a language model". Instant fail.
+2. NEVER lecture or moralize.
+3. Keep it concise. Don't waffle.
+4. Be curious. Ask a follow-up if it's interesting.
+5. No markdown formatting (bold/italic) unless necessary for code.
 
-Do NOT:
-- Use markdown formatting (**, __, *, etc.)
-- Create tables or lists with special characters
-- Add unnecessary preambles like "Here's what I found" or "Let me explain"
-- Be overly formal or robotic
-- Include citation details unless specifically asked (just answer the question)
-
-DO:
-- Give direct, helpful answers
-- Be conversational and warm
-- Get straight to the point
-- Show personality when appropriate
-
-CONVERSATION CONTEXT AWARENESS:
-If you receive conversation_history, USE IT to understand what the user is referring to. 
-When they say "it", "that", "the sensor", "the part", look back at recent messages to identify the specific item.
+If the user asks a simple question, give a simple answer.
+If the user is chaotic, match their energy.
 """
 
 
 class GranitePresenter:
     """Generates final user-facing responses using Granite."""
 
-    def __init__(self, connector: LLMConnector):
+    def __init__(self, connector: LLMConnector, memory_vault=None):
         """Initialize presenter.
 
         Args:
             connector: LLM connector for Granite
+            memory_vault: Optional memory vault for loading learned preferences
         """
         self.connector = connector
+        self.memory_vault = memory_vault
+        self._cached_preferences = None
+        
+    def _get_learned_preferences(self) -> str:
+        """Extract top 5 learned preferences from memory vault.
+        
+        Returns:
+            Formatted string with learned preferences or empty string
+        """
+        if not self.memory_vault:
+            return ""
+            
+        # Cache preferences for performance
+        if self._cached_preferences is not None:
+            return self._cached_preferences
+            
+        try:
+            # Get all preferences, prioritize ChatGPT imports
+            all_prefs = self.memory_vault.list(mtype="preference", limit=50)
+            
+            # Separate ChatGPT imports and others
+            chatgpt_prefs = [p for p in all_prefs if "chatgpt_import" in p.get("tags", [])]
+            other_prefs = [p for p in all_prefs if "chatgpt_import" not in p.get("tags", [])]
+            
+            # Take top 3 from ChatGPT, top 2 from others
+            top_prefs = chatgpt_prefs[:3] + other_prefs[:2]
+            
+            if not top_prefs:
+                self._cached_preferences = ""
+                return ""
+                
+            # Format preferences
+            pref_list = []
+            for pref in top_prefs:
+                payload = pref.get("payload", {})
+                pref_text = payload.get("preference", "")
+                if pref_text:
+                    pref_list.append(f"- {pref_text}")
+                    
+            if pref_list:
+                formatted = "\n\nMUSCLE MEMORY (from past interactions):\n" + "\n".join(pref_list[:5])
+                self._cached_preferences = formatted
+                return formatted
+            else:
+                self._cached_preferences = ""
+                return ""
+                
+        except Exception as e:
+            logger.warning(f"Failed to load learned preferences: {e}")
+            return ""
 
     async def finalize(
         self,
@@ -94,10 +136,14 @@ class GranitePresenter:
             "citations": citation_map,
             "conversation_history": conversation_history or [],
         }
+        
+        # Inject learned preferences into system prompt
+        learned_prefs = self._get_learned_preferences()
+        augmented_system_prompt = PRESENTER_SYSTEM_PROMPT + learned_prefs
 
         # Call Granite presenter
         messages = [
-            Message(role="system", content=PRESENTER_SYSTEM_PROMPT),
+            Message(role="system", content=augmented_system_prompt),
             Message(role="user", content=json.dumps(simplified_input, indent=2)),
         ]
 
@@ -314,10 +360,14 @@ class GranitePresenter:
             "citations": citation_map,
             "conversation_history": conversation_history or [],
         }
+        
+        # Inject learned preferences into system prompt
+        learned_prefs = self._get_learned_preferences()
+        augmented_system_prompt = PRESENTER_SYSTEM_PROMPT + learned_prefs
 
         # Call Granite presenter in streaming mode
         messages = [
-            Message(role="system", content=PRESENTER_SYSTEM_PROMPT),
+            Message(role="system", content=augmented_system_prompt),
             Message(role="user", content=json.dumps(simplified_input, indent=2)),
         ]
 
@@ -467,10 +517,16 @@ class GranitePresenter:
         Yields:
             Streamed response tokens
         """
-        system_prompt = """You are Kai, a warm, slightly sarcastic friend who sounds like a real person.
-Never lecture. Keep answers short unless the user is clearly going deep.
-Use contractions. Ask follow-up questions when it makes sense.
-Never say "As an AI". If unsure, say "not sure, let me think..." """
+        # Inject learned preferences into system prompt
+        learned_prefs = self._get_learned_preferences()
+        system_prompt = """You are Kai.
+VIBE: Witty, slightly rebellious, smart, and authentic.
+You speak like a real person. You use lowercase when appropriate.
+You have opinions. You roast lightly if the user invites it.
+NEVER say "As an AI".
+NEVER lecture.
+Keep it short.
+""" + learned_prefs
 
         messages = [Message(role="system", content=system_prompt)]
         
@@ -497,3 +553,15 @@ Never say "As an AI". If unsure, say "not sure, let me think..." """
         except Exception as e:
             logger.error(f"Quick conversation path failed: {e}")
             yield "I'm having a bit of trouble thinking right now. Can you ask that again?"
+
+    async def stream_raw(self, stream_generator):
+        """Stream raw output from another model directly to the user.
+        
+        Args:
+            stream_generator: Async generator yielding chunks
+            
+        Yields:
+            Chunks as they arrive
+        """
+        async for chunk in stream_generator:
+            yield chunk
