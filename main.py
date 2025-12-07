@@ -313,6 +313,7 @@ from src.api.handlers.chat import (
 from src.api.handlers.models import list_models
 from src.api.handlers.health import check_health
 from src.api.handlers.memory_import import router as memory_router
+from src.api.handlers.memory_vault_api import router as memory_vault_router
 from src.api.handlers.rage_feedback import router as rage_router
 from src.api.handlers.tts import router as tts_router
 from src.api.handlers.deepgram_stt import router as stt_router
@@ -325,6 +326,7 @@ from sse_starlette.sse import EventSourceResponse
 
 # Include routers
 app.include_router(memory_router)
+app.include_router(memory_vault_router)
 app.include_router(rage_router)
 app.include_router(tts_router)  # Google TTS
 app.include_router(stt_router)  # Deepgram STT
