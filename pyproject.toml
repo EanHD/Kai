@@ -27,6 +27,8 @@ dependencies = [
     "sse-starlette>=1.6.0",
     "python-multipart>=0.0.6",
     "tiktoken>=0.12.0",
+    "livekit>=0.13.0",
+    "livekit-agents>=0.9.0",
 ]
 
 [project.optional-dependencies]
