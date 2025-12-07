@@ -1,8 +1,7 @@
 """
 LiveKit TTS Handler - Streaming Text-to-Speech
 
-Uses LiveKit's TTS service with ElevenLabs/Deepgram voices.
-Streams audio chunks for lower latency than batch processing.
+Uses LiveKit's TTS service with Cartesia voices (Felicia, etc).
 """
 
 import logging
@@ -22,65 +21,70 @@ class LiveKitTTSRequest(BaseModel):
     """LiveKit TTS request model (OpenAI-compatible)."""
     model: str = Field(default="tts-1", description="Model identifier")
     input: str = Field(..., description="Text to convert to speech", max_length=5000)
-    voice: str = Field(default="aoede", description="Voice ID")
+    voice: str = Field(default="felicia", description="Voice ID")
     response_format: Literal["mp3", "wav", "opus"] = Field(default="mp3")
     speed: float = Field(default=1.0, ge=0.25, le=4.0)
 
 
-# LiveKit voice mappings (using ElevenLabs or Deepgram)
-LIVEKIT_VOICES = {
-    "aoede": "EXAVITQu4vr4xnSDxMaL",  # Rachel (ElevenLabs)
-    "nova": "21m00Tcm4TlvDq8ikWAM",   # Rachel (ElevenLabs)
-    "alloy": "pNInz6obpgDQGcFmaJgB",  # Adam (ElevenLabs)
-    "echo": "VR6AewLTigWG4xSOukaG",   # Arnold (ElevenLabs)
-    "shimmer": "AZnzlk1XvdvUeBnXmlld",  # Domi (ElevenLabs)
+# Cartesia voice IDs via LiveKit
+CARTESIA_VOICES = {
+    "felicia": "f9836c6e-a0bd-460e-9d3c-f7299fa60f94",  # Felicia - expressive, warm
+    "aoede": "79a125e8-cd45-4c13-8a67-188112f4dd22",    # British Lady
+    "nova": "a0e99841-438c-4a64-b679-ae501e7d6091",     # Friendly Woman
+    "clover": "b7d50908-b17c-442d-ad8d-810c63997ed9",   # Pleasant Female
 }
 
 
 async def stream_tts_audio(text: str, voice_id: str, speed: float) -> AsyncIterator[bytes]:
     """
-    Stream TTS audio from LiveKit/ElevenLabs API.
+    Stream TTS audio from LiveKit/Cartesia.
     """
+    livekit_url = os.getenv("LIVEKIT_URL", "wss://your-livekit-server.com")
     api_key = os.getenv("LIVEKIT_API_KEY")
     api_secret = os.getenv("LIVEKIT_API_SECRET")
     
-    if not api_key:
+    if not api_key or not api_secret:
         raise HTTPException(
             status_code=503,
-            detail={"error": {"message": "LiveKit TTS requires LIVEKIT_API_KEY", "type": "configuration_error"}}
+            detail={"error": {"message": "TTS requires LIVEKIT_API_KEY and LIVEKIT_API_SECRET", "type": "configuration_error"}}
         )
     
-    # Use ElevenLabs API directly for now (LiveKit uses it under the hood)
-    elevenlabs_key = os.getenv("ELEVENLABS_API_KEY")
-    if not elevenlabs_key:
+    # Use Cartesia TTS via their direct API (LiveKit uses this)
+    cartesia_key = os.getenv("CARTESIA_API_KEY")
+    if not cartesia_key:
         raise HTTPException(
             status_code=503,
-            detail={"error": {"message": "TTS requires ELEVENLABS_API_KEY", "type": "configuration_error"}}
+            detail={"error": {"message": "TTS requires CARTESIA_API_KEY", "type": "configuration_error"}}
         )
     
-    url = f"https://api.elevenlabs.io/v1/text-to-speech/{voice_id}/stream"
+    url = "https://api.cartesia.ai/tts/bytes"
     
     headers = {
-        "xi-api-key": elevenlabs_key,
+        "X-API-Key": cartesia_key,
+        "Cartesia-Version": "2024-06-10",
         "Content-Type": "application/json",
     }
     
     data = {
-        "text": text,
-        "model_id": "eleven_turbo_v2",
-        "voice_settings": {
-            "stability": 0.5,
-            "similarity_boost": 0.75,
-            "style": 0.0,
-            "use_speaker_boost": True
-        }
+        "model_id": "sonic-english",
+        "transcript": text,
+        "voice": {
+            "mode": "id",
+            "id": voice_id
+        },
+        "output_format": {
+            "container": "raw",
+            "encoding": "pcm_s16le",
+            "sample_rate": 44100
+        },
+        "language": "en"
     }
     
     async with httpx.AsyncClient(timeout=60.0) as client:
         async with client.stream("POST", url, headers=headers, json=data) as response:
             if response.status_code != 200:
                 error = await response.aread()
-                logger.error(f"ElevenLabs TTS error: {error}")
+                logger.error(f"Cartesia TTS error: {error}")
                 raise HTTPException(
                     status_code=response.status_code,
                     detail={"error": {"message": "TTS streaming failed", "type": "api_error"}}
@@ -91,31 +95,12 @@ async def stream_tts_audio(text: str, voice_id: str, speed: float) -> AsyncItera
                     yield chunk
 
 
-@router.post("/speech/stream")
-async def stream_text_to_speech(request: LiveKitTTSRequest):
-    """
-    Stream TTS audio using LiveKit/ElevenLabs.
-    Returns streaming MP3 audio for lower latency.
-    """
-    voice_id = LIVEKIT_VOICES.get(request.voice.lower(), LIVEKIT_VOICES["aoede"])
-    
-    return StreamingResponse(
-        stream_tts_audio(request.input, voice_id, request.speed),
-        media_type="audio/mpeg",
-        headers={
-            "Content-Disposition": f"attachment; filename=speech.mp3",
-            "Cache-Control": "no-cache",
-        }
-    )
-
-
 @router.post("/speech")
 async def batch_text_to_speech(request: LiveKitTTSRequest):
     """
-    Batch TTS (for compatibility) - collects all chunks and returns.
-    For streaming, use /speech/stream endpoint.
+    Batch TTS using LiveKit/Cartesia.
     """
-    voice_id = LIVEKIT_VOICES.get(request.voice.lower(), LIVEKIT_VOICES["aoede"])
+    voice_id = CARTESIA_VOICES.get(request.voice.lower(), CARTESIA_VOICES["felicia"])
     
     chunks = []
     async for chunk in stream_tts_audio(request.input, voice_id, request.speed):

@@ -1,7 +1,7 @@
 """
 LiveKit STT Handler - Speech-to-Text using Deepgram
 
-Replaces browser SpeechRecognition with reliable Deepgram API via LiveKit.
+Uses LiveKit's built-in Deepgram integration.
 """
 
 import logging
@@ -31,9 +31,10 @@ async def transcribe_audio(
     temperature: float = Form(default=0.0)
 ):
     """
-    Transcribe audio using Deepgram via LiveKit.
+    Transcribe audio using Deepgram (LiveKit's STT provider).
     OpenAI Whisper API compatible.
     """
+    # Use Deepgram directly (same as LiveKit uses internally)
     deepgram_key = os.getenv("DEEPGRAM_API_KEY")
     
     if not deepgram_key:
@@ -48,13 +49,12 @@ async def transcribe_audio(
     # Deepgram API endpoint
     url = "https://api.deepgram.com/v1/listen"
     
-    # Query parameters for Deepgram
+    # Query parameters
     params = {
-        "model": "nova-2",  # Latest Deepgram model
+        "model": "nova-2",
         "language": language,
         "smart_format": "true",
         "punctuate": "true",
-        "diarize": "false",
     }
     
     headers = {
@@ -81,7 +81,7 @@ async def transcribe_audio(
             
             result = response.json()
             
-            # Extract transcript from Deepgram response
+            # Extract transcript
             try:
                 transcript = result["results"]["channels"][0]["alternatives"][0]["transcript"]
             except (KeyError, IndexError) as e:
@@ -104,3 +104,4 @@ async def transcribe_audio(
             status_code=502,
             detail={"error": {"message": f"Failed to connect to STT service: {str(e)}", "type": "connection_error"}}
         )
+
