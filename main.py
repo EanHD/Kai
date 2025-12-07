@@ -315,7 +315,6 @@ from src.api.handlers.health import check_health
 from src.api.handlers.memory_import import router as memory_router
 from src.api.handlers.rage_feedback import router as rage_router
 from src.api.handlers.tts import router as tts_router
-from src.api.handlers.livekit_tts import router as livekit_tts_router
 from src.api.handlers.deepgram_stt import router as stt_router
 from src.api.models.chat import ChatCompletionRequest
 from src.api.models.errors import invalid_request_error, server_error
@@ -327,8 +326,7 @@ from sse_starlette.sse import EventSourceResponse
 # Include routers
 app.include_router(memory_router)
 app.include_router(rage_router)
-app.include_router(tts_router)  # Keep Google TTS for fallback
-app.include_router(livekit_tts_router)  # LiveKit/ElevenLabs TTS
+app.include_router(tts_router)  # Google TTS
 app.include_router(stt_router)  # Deepgram STT
 
 
